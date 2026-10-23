@@ -20,8 +20,6 @@ use crate::dialogs::{self, SwitchChoice};
 use crate::i18n::{tr, trf};
 use crate::params_view::{self, OnChange, ParamsView, Structure};
 
-const CHANNEL_ROW_WIDTH: i32 = 600;
-const CHANNEL_ROW_TIGHTENING: i32 = 400;
 const EVENT_PUMP: Duration = Duration::from_millis(30);
 const WRITE_DEBOUNCE: Duration = Duration::from_millis(250);
 const STATUS_DELAY: Duration = Duration::from_millis(300);
@@ -1260,8 +1258,8 @@ fn build_channels() -> (adw::Clamp, Vec<(Channel, gtk::Button)>) {
     );
     section.append(&channel_row);
     let clamp = adw::Clamp::builder()
-        .maximum_size(CHANNEL_ROW_WIDTH)
-        .tightening_threshold(CHANNEL_ROW_TIGHTENING)
+        .maximum_size(params_view::CONTENT_WIDTH)
+        .tightening_threshold(params_view::CONTENT_TIGHTENING)
         .margin_top(12)
         .margin_bottom(4)
         .child(&section)

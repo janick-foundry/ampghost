@@ -9,6 +9,8 @@ use crate::blocks::{self, BlockSpec};
 use crate::i18n::{tr, trf};
 
 const SPIN_THRESHOLD: u16 = 127;
+pub const CONTENT_WIDTH: i32 = 680;
+pub const CONTENT_TIGHTENING: i32 = 400;
 
 pub type OnChange = Rc<dyn Fn(&'static str, u16)>;
 
@@ -22,7 +24,7 @@ pub struct Structure {
 }
 
 pub struct ParamsView {
-    pub root: adw::PreferencesPage,
+    pub root: gtk::ScrolledWindow,
     pub structure: Structure,
     updaters: Vec<(&'static str, Updater)>,
 }
@@ -57,7 +59,24 @@ pub fn build(
     on_change: &OnChange,
 ) -> ParamsView {
     let previous = guard.replace(true);
-    let root = adw::PreferencesPage::new();
+    let content = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(24)
+        .margin_top(24)
+        .margin_bottom(24)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+    let clamp = adw::Clamp::builder()
+        .maximum_size(CONTENT_WIDTH)
+        .tightening_threshold(CONTENT_TIGHTENING)
+        .child(&content)
+        .build();
+    let root = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vexpand(true)
+        .child(&clamp)
+        .build();
     let mut updaters = Vec::new();
     let main = adw::PreferencesGroup::builder()
         .title(tr(spec.title))
@@ -80,7 +99,7 @@ pub fn build(
         main.add(&row);
         updaters.push((param.id(), update));
     }
-    root.add(&main);
+    content.append(&main);
     let params = blocks::block_params(table, image, spec);
     let details = adw::PreferencesGroup::builder()
         .title(tr("Parameters"))
@@ -102,7 +121,7 @@ pub fn build(
         details.add(&row);
         updaters.push((param.id(), update));
     }
-    root.add(&details);
+    content.append(&details);
     let view = ParamsView {
         root,
         structure,
