@@ -3,7 +3,7 @@ use crate::channel::Channel;
 use crate::error::ProtocolError;
 use crate::identity::Identity;
 use crate::patch::{PatchImage, PatchLayout, PatchOffset, Span};
-use crate::plan::{plan_full_write, plan_partial_write};
+use crate::plan::{WriteOrder, plan_full_write, plan_partial_write};
 use crate::sysex::{Dt1, Rq1};
 use crate::verify::{LinkedType, VerifyRules};
 
@@ -20,9 +20,7 @@ pub struct DeviceProfile {
     pub editor_mode: Address,
     pub channels: &'static [Channel],
     pub verify_rules: VerifyRules,
-    pub max_write_packet: usize,
-    pub late_page: u32,
-    pub effect_chain: Span,
+    pub write_order: WriteOrder,
 }
 
 impl DeviceProfile {
@@ -51,13 +49,7 @@ impl DeviceProfile {
     }
 
     pub fn full_write_plan(&self, image: &PatchImage) -> Result<Vec<Dt1>, ProtocolError> {
-        let packets = plan_full_write(
-            image,
-            self.temp_patch,
-            self.late_page,
-            self.effect_chain,
-            self.max_write_packet,
-        )?;
+        let packets = plan_full_write(image, self.temp_patch, &self.write_order)?;
         self.checked(packets)
     }
 
@@ -66,14 +58,7 @@ impl DeviceProfile {
         image: &PatchImage,
         offsets: &[PatchOffset],
     ) -> Result<Vec<Dt1>, ProtocolError> {
-        let packets = plan_partial_write(
-            image,
-            self.temp_patch,
-            offsets,
-            self.late_page,
-            self.effect_chain,
-            self.max_write_packet,
-        )?;
+        let packets = plan_partial_write(image, self.temp_patch, offsets, &self.write_order)?;
         self.checked(packets)
     }
 
@@ -159,9 +144,12 @@ pub static KATANA_50_MK2: DeviceProfile = DeviceProfile {
         amp_derived: &MK2_AMP_DERIVED,
         linked_types: &MK2_LINKED,
     },
-    max_write_packet: 128,
-    late_page: 0x06,
-    effect_chain: Span::between(PatchOffset::new(0x06, 0x00), PatchOffset::new(0x06, 0x13)),
+    write_order: WriteOrder {
+        type_selects: Span::between(PatchOffset::new(0x06, 0x24), PatchOffset::new(0x06, 0x3D)),
+        late_page: 0x06,
+        effect_chain: Span::between(PatchOffset::new(0x06, 0x00), PatchOffset::new(0x06, 0x13)),
+        max_packet: 128,
+    },
 };
 
 pub static PROFILES: [&DeviceProfile; 1] = [&KATANA_50_MK2];

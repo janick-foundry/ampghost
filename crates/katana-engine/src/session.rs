@@ -218,8 +218,15 @@ impl Session {
                 image: actual,
             });
         }
+        let differing = report
+            .mismatches
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
         tracing::warn!(
             bytes = report.mismatches.len(),
+            %differing,
             "verify mismatch, rewriting differing bytes once"
         );
         let retry = profile.partial_write_plan(target, &report.mismatch_offsets())?;
@@ -257,12 +264,14 @@ impl Session {
         }
         let map = self.read_program_change_map()?;
         let program = map.program(channel);
+        tracing::info!(%channel, program, "program change map");
         let mut actual = None;
         for attempt in 1..=self.timings.channel_attempts {
             sink(Event::Progress(Stage::ProgramChange { program, attempt }));
             self.transport.send(&program_change(program))?;
             self.drain(self.timings.channel_settle)?;
             let current = self.read_current_channel()?;
+            tracing::info!(%current, attempt, "channel readback");
             actual = Some(current);
             if current == channel {
                 self.drain(self.timings.channel_settle)?;
