@@ -20,6 +20,8 @@ use crate::dialogs::{self, SwitchChoice};
 use crate::i18n::{tr, trf};
 use crate::params_view::{self, OnChange, ParamsView, Structure};
 
+const CHANNEL_ROW_WIDTH: i32 = 600;
+const CHANNEL_ROW_TIGHTENING: i32 = 400;
 const EVENT_PUMP: Duration = Duration::from_millis(30);
 const WRITE_DEBOUNCE: Duration = Duration::from_millis(250);
 const STATUS_DELAY: Duration = Duration::from_millis(300);
@@ -1226,18 +1228,16 @@ fn build_header() -> Header {
     (header, title, status_box, status_label, sidebar_button)
 }
 
-fn build_channels() -> (gtk::Box, Vec<(Channel, gtk::Button)>) {
+fn build_channels() -> (adw::Clamp, Vec<(Channel, gtk::Button)>) {
     let channel_row = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .homogeneous(true)
-        .hexpand(true)
         .css_classes(["linked", "channel-row"])
         .build();
     let mut channel_buttons = Vec::new();
     for channel in Channel::ALL {
         let button = gtk::Button::builder()
             .label(channel.label())
-            .hexpand(true)
             .css_classes(["channel-button"])
             .action_name("win.switch-channel")
             .action_target(&channel.label().to_variant())
@@ -1248,10 +1248,8 @@ fn build_channels() -> (gtk::Box, Vec<(Channel, gtk::Button)>) {
     let section = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(8)
-        .margin_start(16)
-        .margin_end(16)
-        .margin_top(12)
-        .margin_bottom(4)
+        .margin_start(12)
+        .margin_end(12)
         .build();
     section.append(
         &gtk::Label::builder()
@@ -1261,7 +1259,14 @@ fn build_channels() -> (gtk::Box, Vec<(Channel, gtk::Button)>) {
             .build(),
     );
     section.append(&channel_row);
-    (section, channel_buttons)
+    let clamp = adw::Clamp::builder()
+        .maximum_size(CHANNEL_ROW_WIDTH)
+        .tightening_threshold(CHANNEL_ROW_TIGHTENING)
+        .margin_top(12)
+        .margin_bottom(4)
+        .child(&section)
+        .build();
+    (clamp, channel_buttons)
 }
 
 fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
