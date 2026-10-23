@@ -250,7 +250,7 @@ fn scale_row(
         .adjustment(&adjustment)
         .draw_value(false)
         .digits(0)
-        .hexpand(true)
+        .hexpand(false)
         .width_request(280)
         .valign(gtk::Align::Center)
         .build();

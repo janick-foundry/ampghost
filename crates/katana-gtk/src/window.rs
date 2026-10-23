@@ -142,7 +142,11 @@ fn pump_events(ui: &Rc<Ui>, events: mpsc::Receiver<Event>) {
                 Ok(event) => ui.handle_event(event),
                 Err(mpsc::TryRecvError::Empty) => return glib::ControlFlow::Continue,
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    tracing::warn!("engine event channel closed");
+                    if ui.engine.borrow().is_some() {
+                        tracing::warn!("engine event channel closed unexpectedly");
+                    } else {
+                        tracing::debug!("engine event channel closed");
+                    }
                     return glib::ControlFlow::Break;
                 }
             }
@@ -192,6 +196,24 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         }
     });
     ui.window.add_action(&switch);
+    let apply = gio::SimpleAction::new("apply-preset", Some(glib::VariantTy::STRING));
+    let apply_ui = Rc::clone(ui);
+    apply.connect_activate(move |_, parameter| {
+        let Some(key) = parameter.and_then(glib::Variant::get::<String>) else {
+            return;
+        };
+        let entry = apply_ui
+            .model
+            .borrow()
+            .presets
+            .iter()
+            .find(|entry| entry.key == key)
+            .cloned();
+        if let Some(entry) = entry {
+            apply_ui.apply_preset(entry);
+        }
+    });
+    ui.window.add_action(&apply);
     let quit = gio::SimpleAction::new("quit", None);
     let quit_ui = Rc::clone(ui);
     quit.connect_activate(move |_, _| quit_ui.window.close());
@@ -358,15 +380,6 @@ impl Ui {
         self.preset_search.connect_search_changed(move |entry| {
             *search_ui.search_text.borrow_mut() = entry.text().to_string();
             search_ui.preset_list.invalidate_filter();
-        });
-        let activate_ui = Rc::clone(self);
-        self.preset_list.connect_row_activated(move |_, row| {
-            let entry = usize::try_from(row.index())
-                .ok()
-                .and_then(|index| activate_ui.model.borrow().presets.get(index).cloned());
-            if let Some(entry) = entry {
-                activate_ui.apply_preset(entry);
-            }
         });
     }
 
@@ -956,6 +969,8 @@ impl Ui {
                 .subtitle(subtitle)
                 .use_markup(false)
                 .activatable(true)
+                .action_name("win.apply-preset")
+                .action_target(&entry.key.to_variant())
                 .tooltip_text(tr("Apply to temp and verify"))
                 .build();
             row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));

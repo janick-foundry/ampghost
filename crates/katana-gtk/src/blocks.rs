@@ -263,7 +263,7 @@ pub fn type_label(table: &ParamTable, image: &PatchImage, spec: &BlockSpec) -> O
 }
 
 pub fn pretty_label(label: &str) -> String {
-    let trimmed = label.trim();
+    let trimmed = label.trim().trim_end_matches(':').trim_end();
     if let Some(inner) = trimmed
         .strip_prefix("Var [")
         .and_then(|rest| rest.strip_suffix(']'))
