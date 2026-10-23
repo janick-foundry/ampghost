@@ -5,7 +5,7 @@ use adw::prelude::*;
 use katana_params::{EnumOption, Param, ParamKind, ParamTable};
 use katana_protocol::PatchImage;
 
-use crate::blocks::{self, BlockSpec};
+use crate::blocks::{self, BlockSpec, Variant};
 use crate::i18n::{tr, trf};
 
 const SPIN_THRESHOLD: u16 = 127;
@@ -94,7 +94,12 @@ pub fn build(
             id if id == spec.select_param => tr("Variant"),
             _ => tr("Type"),
         };
-        let (row, update) = make_row(param, &title, guard, on_change);
+        let (row, update) = match param.kind() {
+            ParamKind::Enum { options } if Some(id) == spec.select_param => {
+                variant_row(param, options, &title, guard, on_change)
+            }
+            _ => make_row(param, &title, guard, on_change),
+        };
         row.set_sensitive(structure.writable);
         main.add(&row);
         updaters.push((param.id(), update));
@@ -239,6 +244,77 @@ fn combo_row(
                 .and_then(|index| u32::try_from(index).ok())
                 .unwrap_or(gtk::INVALID_LIST_POSITION);
             target.set_selected(position);
+        }),
+    )
+}
+
+fn variant_row(
+    param: &'static Param,
+    options: &'static [EnumOption],
+    title: &str,
+    guard: &Rc<Cell<bool>>,
+    on_change: &OnChange,
+) -> (gtk::Widget, Updater) {
+    let variants: Vec<(&'static EnumOption, Variant)> = options
+        .iter()
+        .filter_map(|option| Variant::from_label(&option.label).map(|variant| (option, variant)))
+        .collect();
+    if variants.len() != options.len() {
+        return combo_row(param, options, title, guard, on_change);
+    }
+    let selector = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .valign(gtk::Align::Center)
+        .margin_top(6)
+        .margin_bottom(6)
+        .css_classes(["linked", "variant-selector"])
+        .build();
+    selector.update_property(&[gtk::accessible::Property::Label(title)]);
+    let id = param.id();
+    let mut buttons: Vec<(u16, gtk::ToggleButton)> = Vec::new();
+    for (option, variant) in variants {
+        let dot = gtk::Box::builder()
+            .css_classes(["variant-dot", variant.css_class()])
+            .valign(gtk::Align::Center)
+            .build();
+        let label = blocks::pretty_label(&option.label);
+        let content = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(8)
+            .build();
+        content.append(&dot);
+        content.append(&gtk::Label::builder().label(&label).xalign(0.0).build());
+        let button = gtk::ToggleButton::builder()
+            .child(&content)
+            .tooltip_text(tr(variant.title()))
+            .css_classes(["variant-option"])
+            .build();
+        button.update_property(&[gtk::accessible::Property::Label(&label)]);
+        if let Some((_, first)) = buttons.first() {
+            button.set_group(Some(first));
+        }
+        let handler_guard = Rc::clone(guard);
+        let callback = Rc::clone(on_change);
+        let value = option.value;
+        button.connect_toggled(move |button| {
+            if button.is_active() && !handler_guard.get() {
+                callback(id, value);
+            }
+        });
+        selector.append(&button);
+        buttons.push((value, button));
+    }
+    let row = adw::ActionRow::builder()
+        .title(title)
+        .use_markup(false)
+        .build();
+    row.add_suffix(&selector);
+    (
+        row.upcast(),
+        Box::new(move |value| {
+            for (option, button) in &buttons {
+                button.set_active(*option == value);
+            }
         }),
     )
 }

@@ -9,6 +9,15 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub fn from_label(label: &str) -> Option<Self> {
+        match label.trim().to_ascii_lowercase().as_str() {
+            "green" => Some(Self::Green),
+            "red" => Some(Self::Red),
+            "yellow" => Some(Self::Yellow),
+            _ => None,
+        }
+    }
+
     pub fn css_class(self) -> &'static str {
         match self {
             Self::Green => "variant-green",
@@ -238,12 +247,7 @@ pub fn extras() -> impl Iterator<Item = &'static BlockSpec> {
 pub fn variant(table: &ParamTable, image: &PatchImage, spec: &BlockSpec) -> Option<Variant> {
     let param = table.get(spec.select_param?).ok()?;
     let selected = param_value(param, image)?;
-    match param.describe(selected).to_ascii_lowercase().as_str() {
-        "green" => Some(Variant::Green),
-        "red" => Some(Variant::Red),
-        "yellow" => Some(Variant::Yellow),
-        _ => None,
-    }
+    Variant::from_label(&param.describe(selected))
 }
 
 pub fn is_on(table: &ParamTable, image: &PatchImage, spec: &BlockSpec) -> Option<bool> {

@@ -43,6 +43,19 @@
   background-color: alpha(currentColor, 0.15);
 }
 
+.variant-option {
+  min-width: 112px;
+  padding: 6px 14px;
+}
+
+.variant-option:checked {
+  font-weight: bold;
+}
+
+.variant-option:not(:checked) .variant-dot {
+  opacity: 0.45;
+}
+
 .status-label {
   font-feature-settings: "tnum";
 }
