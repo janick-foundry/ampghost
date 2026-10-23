@@ -112,6 +112,7 @@ pub struct Ui {
     updating: Rc<Cell<bool>>,
     pending: RefCell<BTreeMap<&'static str, u16>>,
     write_timers: RefCell<BTreeMap<&'static str, glib::SourceId>>,
+    in_flight: RefCell<BTreeMap<&'static str, u16>>,
     status_serial: Cell<u64>,
     closing: Cell<bool>,
     cards: RefCell<Vec<Card>>,
@@ -384,6 +385,7 @@ impl Ui {
             updating: Rc::new(Cell::new(false)),
             pending: RefCell::new(BTreeMap::new()),
             write_timers: RefCell::new(BTreeMap::new()),
+            in_flight: RefCell::new(BTreeMap::new()),
             status_serial: Cell::new(0),
             closing: Cell::new(false),
             cards: RefCell::new(Vec::new()),
@@ -620,6 +622,9 @@ impl Ui {
     }
 
     fn after_job(self: &Rc<Self>) {
+        if !self.jobs.borrow().contains(&Job::WriteParams) {
+            self.in_flight.borrow_mut().clear();
+        }
         let next = self.jobs.borrow().front().cloned();
         match next {
             Some(job) if job.shows_status() => self.begin_status(&job),
@@ -796,15 +801,15 @@ impl Ui {
         }
         match edit {
             Edit::Discrete(value) => {
-                self.cancel_write_timer(id);
-                self.pending.borrow_mut().insert(id, value);
-                self.refresh_header();
-                self.flush_writes();
+                if self.stage_write(id, value) {
+                    self.cancel_write_timer(id);
+                    self.flush_writes();
+                }
             }
             Edit::Continuous(value) => {
-                self.pending.borrow_mut().insert(id, value);
-                self.refresh_header();
-                self.schedule_write(id);
+                if self.stage_write(id, value) {
+                    self.schedule_write(id);
+                }
             }
             Edit::Released => {
                 if self.pending.borrow().contains_key(id) {
@@ -813,6 +818,29 @@ impl Ui {
                 }
             }
         }
+    }
+
+    fn stage_write(&self, id: &'static str, value: u16) -> bool {
+        if self.pending.borrow().get(id) == Some(&value) {
+            return false;
+        }
+        let written = self.in_flight.borrow().get(id).copied().or_else(|| {
+            self.model
+                .borrow()
+                .image
+                .as_ref()
+                .and_then(|image| blocks::value(self.table, image, id))
+        });
+        if written == Some(value) {
+            if self.pending.borrow_mut().remove(id).is_some() {
+                self.cancel_write_timer(id);
+                self.refresh_header();
+            }
+            return false;
+        }
+        self.pending.borrow_mut().insert(id, value);
+        self.refresh_header();
+        true
     }
 
     fn schedule_write(self: &Rc<Self>, id: &'static str) {
@@ -862,7 +890,9 @@ impl Ui {
     }
 
     fn take_pending_writes(&self) -> Vec<ParamWrite> {
-        std::mem::take(&mut *self.pending.borrow_mut())
+        let pending = std::mem::take(&mut *self.pending.borrow_mut());
+        self.in_flight.borrow_mut().extend(pending.iter());
+        pending
             .into_iter()
             .map(|(id, value)| ParamWrite {
                 id: id.to_owned(),

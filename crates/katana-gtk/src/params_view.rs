@@ -359,6 +359,7 @@ fn scale_row(
         .adjustment(&adjustment)
         .draw_value(false)
         .digits(0)
+        .round_digits(0)
         .hexpand(false)
         .width_request(280)
         .valign(gtk::Align::Center)
@@ -379,20 +380,44 @@ fn scale_row(
     let handler_guard = Rc::clone(guard);
     let callback = Rc::clone(on_change);
     let handler_label = value_label.clone();
-    let release = gtk::EventControllerLegacy::new();
-    let release_guard = Rc::clone(guard);
-    let release_callback = Rc::clone(on_change);
-    release.connect_event(move |_, event| {
-        let ended = matches!(
-            event.event_type(),
-            gtk::gdk::EventType::ButtonRelease | gtk::gdk::EventType::TouchEnd
-        );
-        if ended && !release_guard.get() {
-            release_callback(id, Edit::Released);
+    let dragging = Rc::new(Cell::new(false));
+    let deferred: Rc<Cell<Option<u16>>> = Rc::new(Cell::new(None));
+    let pointer = gtk::EventControllerLegacy::builder()
+        .propagation_phase(gtk::PropagationPhase::Capture)
+        .build();
+    let pointer_guard = Rc::clone(guard);
+    let pointer_callback = Rc::clone(on_change);
+    let pointer_dragging = Rc::clone(&dragging);
+    let pointer_deferred = Rc::clone(&deferred);
+    let pointer_adjustment = adjustment.clone();
+    let pointer_label = value_label.clone();
+    pointer.connect_event(move |_, event| {
+        match event.event_type() {
+            gtk::gdk::EventType::ButtonPress | gtk::gdk::EventType::TouchBegin => {
+                pointer_dragging.set(true);
+            }
+            gtk::gdk::EventType::ButtonRelease
+            | gtk::gdk::EventType::TouchEnd
+            | gtk::gdk::EventType::TouchCancel
+                if pointer_dragging.replace(false) =>
+            {
+                if !pointer_guard.get() {
+                    pointer_callback(id, Edit::Released);
+                }
+                if let Some(value) = pointer_deferred.take()
+                    && to_raw(pointer_adjustment.value()) == value
+                {
+                    let previous = pointer_guard.replace(true);
+                    pointer_adjustment.set_value(f64::from(value));
+                    pointer_label.set_text(&param.describe(value));
+                    pointer_guard.set(previous);
+                }
+            }
+            _ => {}
         }
         gtk::glib::Propagation::Proceed
     });
-    scale.add_controller(release);
+    scale.add_controller(pointer);
     scale.connect_value_changed(move |scale| {
         let raw = to_raw(scale.value());
         handler_label.set_text(&param.describe(raw));
@@ -403,6 +428,11 @@ fn scale_row(
     (
         row.upcast(),
         Box::new(move |value| {
+            if dragging.get() {
+                deferred.set(Some(value));
+                return;
+            }
+            deferred.set(None);
             adjustment.set_value(f64::from(value));
             value_label.set_text(&param.describe(value));
         }),
