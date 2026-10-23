@@ -21,7 +21,7 @@ use crate::i18n::{tr, trf};
 use crate::params_view::{self, Edit, OnChange, ParamsView, Structure};
 
 const EVENT_PUMP: Duration = Duration::from_millis(30);
-const CONTINUOUS_WRITE_DEBOUNCE: Duration = Duration::from_millis(150);
+const CONTINUOUS_WRITE_DEBOUNCE: Duration = Duration::from_millis(500);
 const STATUS_DELAY: Duration = Duration::from_millis(300);
 
 type Handler = Box<dyn Fn(&Rc<Ui>)>;
