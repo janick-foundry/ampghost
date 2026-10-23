@@ -11,7 +11,8 @@ mod timings;
 
 pub use clock::Clock;
 pub use command::{
-    Command, DetectReport, DeviceInfo, Event, ParamWrite, Stage, SwitchOutcome, WriteOutcome,
+    Command, DetectReport, DeviceInfo, Event, ParamWrite, PresetEntry, Stage, SwitchOutcome,
+    WriteOutcome,
 };
 pub use engine::Engine;
 pub use error::EngineError;

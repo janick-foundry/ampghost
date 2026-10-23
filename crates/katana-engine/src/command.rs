@@ -20,6 +20,7 @@ pub enum Command {
     SavePreset { name: String },
     ApplyPreset { key: String },
     ListPresets,
+    ListBackups,
     Shutdown,
 }
 
@@ -66,13 +67,25 @@ pub struct SwitchOutcome {
     pub temp: PatchImage,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresetEntry {
+    pub key: String,
+    pub name: String,
+    pub model: String,
+    pub created: String,
+    pub patch_name: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
     EditorMode,
     Writing { packets: usize },
     Verifying { attempt: u8 },
     Rewriting { bytes: usize },
+    WaitingForAmp { millis: u64 },
     ProgramChange { program: u8, attempt: u8 },
+    ConfirmingChannel { attempt: u8 },
+    ReadingTemp,
 }
 
 #[derive(Debug)]
@@ -99,7 +112,8 @@ pub enum Event {
         name: String,
         outcome: WriteOutcome,
     },
-    Presets(Vec<String>),
+    Presets(Vec<PresetEntry>),
+    Backups(Vec<String>),
     Unsolicited(Dt1),
     Failed(EngineError),
     ShutDown,

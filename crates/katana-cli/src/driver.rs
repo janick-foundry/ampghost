@@ -163,7 +163,9 @@ impl Driver {
                 }
             }
             Action::PresetList => match self.request(Command::ListPresets)? {
-                Event::Presets(keys) => keys.iter().for_each(|key| println!("{key}")),
+                Event::Presets(entries) => entries
+                    .iter()
+                    .for_each(|entry| println!("{}\t{}", entry.key, entry.name)),
                 other => bail!("unexpected engine event {other:?}"),
             },
             Action::SwitchChannel {

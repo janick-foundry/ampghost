@@ -13,6 +13,9 @@ use crate::command::{Command, Event};
 use crate::engine::Engine;
 use crate::error::EngineError;
 
+const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(200);
+const IDLE_POLL_WINDOW: Duration = Duration::from_millis(5);
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SystemClock;
 
@@ -147,11 +150,19 @@ pub fn spawn(
     let thread = thread::Builder::new()
         .name("katana-engine".to_owned())
         .spawn(move || {
-            for command in receiver {
-                let stop = matches!(command, Command::Shutdown);
-                engine.handle(command, &mut *sink);
-                if stop {
-                    break;
+            loop {
+                match receiver.recv_timeout(IDLE_POLL_INTERVAL) {
+                    Ok(command) => {
+                        let stop = matches!(command, Command::Shutdown);
+                        engine.handle(command, &mut *sink);
+                        if stop {
+                            break;
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        engine.poll(IDLE_POLL_WINDOW, &mut *sink);
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
             }
         })?;

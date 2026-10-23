@@ -1,14 +1,15 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use katana_midi::{MidiBackend, katana_candidates};
-use katana_protocol::{PatchImage, PatchOffset};
+use katana_protocol::{LinkedType, PatchImage, PatchOffset};
 use katana_store::{
     Preset, PresetStorage, decode_preset, decode_syx, encode_preset, encode_syx, preset_key,
-    validate_key,
+    read_preset_summary, validate_key,
 };
 
 use crate::clock::Clock;
-use crate::command::{Command, DetectReport, Event, ParamWrite, WriteOutcome};
+use crate::command::{Command, DetectReport, Event, ParamWrite, PresetEntry, WriteOutcome};
 use crate::error::EngineError;
 use crate::session::Session;
 use crate::timings::Timings;
@@ -60,6 +61,18 @@ impl Engine {
         }
     }
 
+    pub fn poll(&mut self, window: Duration, sink: &mut dyn FnMut(Event)) {
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        if let Err(error) = session.drain(window) {
+            tracing::debug!(%error, "idle poll failed");
+        }
+        for packet in session.take_unsolicited() {
+            sink(Event::Unsolicited(packet));
+        }
+    }
+
     fn run(&mut self, command: Command, sink: &mut dyn FnMut(Event)) -> Result<Event, EngineError> {
         match command {
             Command::Detect => {
@@ -82,7 +95,8 @@ impl Engine {
             Command::RestoreBackup { key } => self.restore_backup(key, sink),
             Command::SavePreset { name } => self.save_preset(name),
             Command::ApplyPreset { key } => self.apply_preset(key, sink),
-            Command::ListPresets => Ok(Event::Presets(self.presets.list()?)),
+            Command::ListPresets => self.list_presets().map(Event::Presets),
+            Command::ListBackups => Ok(Event::Backups(self.backups.list()?)),
             Command::Shutdown => {
                 self.session = None;
                 Ok(Event::ShutDown)
@@ -151,6 +165,7 @@ impl Engine {
     ) -> Result<WriteOutcome, EngineError> {
         let table = katana_params::table()?;
         let session = self.session()?;
+        let links = session.profile()?.verify_rules.linked_types;
         let current = session.read_temp()?;
         let mut target = current.clone();
         for write in writes {
@@ -161,6 +176,7 @@ impl Engine {
             }
             tracing::info!(id = %write.id, value = write.value, %offset, "param");
         }
+        link_variant_types(&current, &mut target, links)?;
         let changed: Vec<PatchOffset> = target.differing_offsets(&current);
         if changed.is_empty() {
             return Ok(WriteOutcome {
@@ -171,6 +187,39 @@ impl Engine {
             });
         }
         session.write_verified(&target, Some(&changed), sink)
+    }
+
+    fn list_presets(&self) -> Result<Vec<PresetEntry>, EngineError> {
+        let mut entries = Vec::new();
+        for key in self.presets.list()? {
+            let summary = self
+                .presets
+                .read(&key)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .and_then(|text| read_preset_summary(&text).ok());
+            let entry = if let Some(summary) = summary {
+                PresetEntry {
+                    key,
+                    name: summary.name,
+                    model: summary.model,
+                    created: summary.created,
+                    patch_name: summary.patch_name,
+                }
+            } else {
+                tracing::warn!(%key, "unreadable preset file");
+                PresetEntry {
+                    name: key.trim_end_matches(".json").to_owned(),
+                    key,
+                    model: String::new(),
+                    created: String::new(),
+                    patch_name: String::new(),
+                }
+            };
+            entries.push(entry);
+        }
+        entries.sort_by_key(|entry| entry.name.to_lowercase());
+        Ok(entries)
     }
 
     fn backup_temp(&mut self, key: String) -> Result<Event, EngineError> {
@@ -237,4 +286,32 @@ impl Engine {
             outcome,
         })
     }
+}
+
+fn link_variant_types(
+    current: &PatchImage,
+    target: &mut PatchImage,
+    links: &[LinkedType],
+) -> Result<(), EngineError> {
+    for link in links {
+        let Some(variant_at) = link.active_variant(target) else {
+            continue;
+        };
+        if current.get(link.select_at) != target.get(link.select_at) {
+            if let Some(value) = target.get(variant_at) {
+                target.set(link.type_at, value)?;
+                tracing::info!(
+                    block = link.block,
+                    value,
+                    "variant selected, block type follows"
+                );
+            }
+        } else if current.get(link.type_at) != target.get(link.type_at)
+            && let Some(value) = target.get(link.type_at)
+        {
+            target.set(variant_at, value)?;
+            tracing::info!(block = link.block, value, %variant_at, "block type stored in active variant");
+        }
+    }
+    Ok(())
 }

@@ -39,6 +39,14 @@ impl Preset {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresetSummary {
+    pub name: String,
+    pub model: String,
+    pub created: String,
+    pub patch_name: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct PresetFile {
     format: String,
@@ -104,6 +112,22 @@ pub fn decode_preset(
         .collect::<Result<Vec<_>, StoreError>>()?;
     let image = PatchImage::from_packets(layout, base, &packets)?;
     Preset::new(file.name, file.model, file.created, image)
+}
+
+pub fn read_preset_summary(text: &str) -> Result<PresetSummary, StoreError> {
+    let file: PresetFile = serde_json::from_str(text)?;
+    if file.format != PRESET_FORMAT || file.version != PRESET_VERSION {
+        return Err(StoreError::Format {
+            format: file.format,
+            version: file.version,
+        });
+    }
+    Ok(PresetSummary {
+        name: file.name,
+        model: file.model,
+        created: file.created,
+        patch_name: file.patch_name,
+    })
 }
 
 fn hex(bytes: &[u8]) -> String {

@@ -193,7 +193,7 @@ impl Session {
         self.program_change_ready = Some(self.clock.now() + self.timings.program_change_holdoff);
     }
 
-    fn wait_for_program_change(&mut self) -> Result<(), EngineError> {
+    fn wait_for_program_change(&mut self, sink: &mut dyn FnMut(Event)) -> Result<(), EngineError> {
         let Some(ready) = self.program_change_ready else {
             return Ok(());
         };
@@ -203,6 +203,8 @@ impl Session {
                 millis = wait.as_millis(),
                 "waiting for amp to accept program change"
             );
+            let millis = u64::try_from(wait.as_millis()).unwrap_or(u64::MAX);
+            sink(Event::Progress(Stage::WaitingForAmp { millis }));
             self.drain(wait)?;
         }
         Ok(())
@@ -290,16 +292,18 @@ impl Session {
         tracing::info!(%channel, program, "program change map");
         let mut actual = None;
         for attempt in 1..=self.timings.channel_attempts {
-            self.wait_for_program_change()?;
+            self.wait_for_program_change(sink)?;
             sink(Event::Progress(Stage::ProgramChange { program, attempt }));
             self.transport.send(&program_change(program))?;
             self.hold_off_program_change();
             self.drain(self.timings.channel_settle)?;
+            sink(Event::Progress(Stage::ConfirmingChannel { attempt }));
             let current = self.read_current_channel()?;
             tracing::info!(%current, attempt, "channel readback");
             actual = Some(current);
             if current == channel {
                 self.drain(self.timings.channel_settle)?;
+                sink(Event::Progress(Stage::ReadingTemp));
                 let temp = self.read_temp()?;
                 return Ok(SwitchOutcome {
                     channel,

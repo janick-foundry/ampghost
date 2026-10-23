@@ -22,12 +22,15 @@ const VERIFIED: [([u8; 4], &str); 5] = [
 struct RawTable {
     schema: u32,
     params: Vec<RawParam>,
+    #[serde(default)]
+    mod_fx_type_to_sub: HashMap<String, String>,
 }
 
 #[derive(Debug)]
 pub struct ParamTable {
     params: Vec<Param>,
     by_id: HashMap<String, usize>,
+    sub_by_type: HashMap<u16, String>,
 }
 
 impl ParamTable {
@@ -56,7 +59,16 @@ impl ParamTable {
             .enumerate()
             .map(|(index, param)| (param.id().to_owned(), index))
             .collect();
-        Ok(Self { params, by_id })
+        let sub_by_type = raw
+            .mod_fx_type_to_sub
+            .into_iter()
+            .filter_map(|(key, sub)| u16::from_str_radix(&key, 16).ok().map(|value| (value, sub)))
+            .collect();
+        Ok(Self {
+            params,
+            by_id,
+            sub_by_type,
+        })
     }
 
     pub fn get(&self, id: &str) -> Result<&Param, ParamsError> {
@@ -64,6 +76,10 @@ impl ParamTable {
             .get(id)
             .and_then(|&index| self.params.get(index))
             .ok_or_else(|| ParamsError::Unknown(id.to_owned()))
+    }
+
+    pub fn sub_for_type(&self, value: u16) -> Option<&str> {
+        self.sub_by_type.get(&value).map(String::as_str)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Param> {
