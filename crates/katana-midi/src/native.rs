@@ -71,7 +71,7 @@ impl MidiTransport for MidirTransport {
     }
 
     fn send(&mut self, message: &[u8]) -> Result<(), MidiError> {
-        tracing::trace!(bytes = message.len(), "midi out");
+        tracing::trace!(bytes = ?message, "midi out");
         self.output
             .send(message)
             .map_err(|error| MidiError::Send(error.to_string()))
