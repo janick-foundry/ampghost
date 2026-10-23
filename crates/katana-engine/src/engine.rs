@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use katana_midi::{MidiBackend, katana_candidates};
+use katana_params::ParamTable;
 use katana_protocol::{LinkedType, PatchImage, PatchOffset};
 use katana_store::{
     Preset, PresetStorage, decode_preset, decode_syx, encode_preset, encode_syx, preset_key,
@@ -167,16 +168,7 @@ impl Engine {
         let session = self.session()?;
         let links = session.profile()?.verify_rules.linked_types;
         let current = session.read_temp()?;
-        let mut target = current.clone();
-        for write in writes {
-            let param = table.get(&write.id)?;
-            let offset = param.patch_offset()?;
-            for (distance, byte) in (0_u32..).zip(param.encode(write.value)?) {
-                target.set(offset.plus(distance), byte)?;
-            }
-            tracing::info!(id = %write.id, value = write.value, %offset, "param");
-        }
-        link_variant_types(&current, &mut target, links)?;
+        let target = apply_param_writes(table, &current, writes, links)?;
         let changed: Vec<PatchOffset> = target.differing_offsets(&current);
         if changed.is_empty() {
             return Ok(WriteOutcome {
@@ -286,6 +278,25 @@ impl Engine {
             outcome,
         })
     }
+}
+
+pub fn apply_param_writes(
+    table: &ParamTable,
+    current: &PatchImage,
+    writes: &[ParamWrite],
+    links: &[LinkedType],
+) -> Result<PatchImage, EngineError> {
+    let mut target = current.clone();
+    for write in writes {
+        let param = table.get(&write.id)?;
+        let offset = param.patch_offset()?;
+        for (distance, byte) in (0_u32..).zip(param.encode(write.value)?) {
+            target.set(offset.plus(distance), byte)?;
+        }
+        tracing::info!(id = %write.id, value = write.value, %offset, "param");
+    }
+    link_variant_types(current, &mut target, links)?;
+    Ok(target)
 }
 
 fn link_variant_types(

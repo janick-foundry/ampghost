@@ -35,6 +35,8 @@ pub enum ProtocolError {
     ChannelReply,
     #[error("program change map needs 9 bytes, got {0}")]
     ProgramChangeMap(usize),
+    #[error("patch name {0:?} must be at most 16 printable ASCII characters")]
+    InvalidName(String),
     #[error("write of {len} bytes at {address} is forbidden by the device profile")]
     WriteForbidden { address: Address, len: usize },
 }

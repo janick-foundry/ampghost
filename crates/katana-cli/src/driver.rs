@@ -5,25 +5,46 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use katana_engine::{
     Clock, Command, Engine, EngineHandle, Event, FileStorage, ParamWrite, SystemClock,
-    default_data_dir, spawn,
+    apply_param_writes, default_data_dir, spawn,
 };
 use katana_midi::MidirBackend;
+use katana_params::Param;
 use katana_protocol::{DeviceProfile, KATANA_50_MK2, PatchImage};
-use katana_store::{decode_syx, encode_syx, preset_key};
+use katana_store::{
+    Preset, PresetStorage, decode_preset, decode_syx, encode_preset, encode_syx, preset_key,
+};
 
 use crate::cli::{Action, Args};
 use crate::output::{print_detect, print_dump, print_image, print_outcome, sha256_hex};
 
 const EVENT_TIMEOUT: Duration = Duration::from_secs(60);
 const PROFILE: &DeviceProfile = &KATANA_50_MK2;
+const VALUE_SEARCH_LIMIT: u16 = 4096;
 
 pub fn run(args: Args) -> Result<()> {
     let data_dir = match args.data_dir {
         Some(dir) => dir,
         None => default_data_dir().context("no user data directory available")?,
     };
-    let (backup_root, backup_key) = backup_location(&args.command, &data_dir)?;
     let presets = FileStorage::new(data_dir.join("presets")).with_extension(".json");
+    if let Action::PresetDerive {
+        from,
+        name,
+        patch_name,
+        sets,
+        replace,
+    } = args.command
+    {
+        let request = DeriveRequest {
+            from,
+            name,
+            patch_name,
+            sets,
+            replace,
+        };
+        return derive_preset(presets, &request);
+    }
+    let (backup_root, backup_key) = backup_location(&args.command, &data_dir)?;
     let backups = FileStorage::new(backup_root).with_extension(".syx");
     let engine = Engine::new(
         Box::new(MidirBackend::new()),
@@ -146,14 +167,7 @@ impl Driver {
                 other => bail!("unexpected engine event {other:?}"),
             },
             Action::PresetApply { name } => {
-                let key = if Path::new(&name)
-                    .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
-                {
-                    name
-                } else {
-                    preset_key(&name)?
-                };
+                let key = key_for(&name)?;
                 match self.request(Command::ApplyPreset { key })? {
                     Event::PresetApplied { key, name, outcome } => {
                         println!("applied preset {name:?} ({key})");
@@ -168,6 +182,7 @@ impl Driver {
                     .for_each(|entry| println!("{}\t{}", entry.key, entry.name)),
                 other => bail!("unexpected engine event {other:?}"),
             },
+            Action::PresetDerive { .. } => bail!("preset-derive runs without the amp"),
             Action::SwitchChannel {
                 channel,
                 discard_temp,
@@ -258,6 +273,101 @@ impl Driver {
         );
         Ok(())
     }
+}
+
+struct DeriveRequest {
+    from: String,
+    name: String,
+    patch_name: Option<String>,
+    sets: Vec<String>,
+    replace: bool,
+}
+
+fn derive_preset(mut presets: FileStorage, request: &DeriveRequest) -> Result<()> {
+    let table = katana_params::table()?;
+    let from_key = key_for(&request.from)?;
+    let text = String::from_utf8(presets.read(&from_key)?)
+        .with_context(|| format!("preset {from_key} is not UTF-8"))?;
+    let base = decode_preset(&text, &PROFILE.patch_layout, PROFILE.temp_patch)?;
+    let mut writes = Vec::new();
+    for entry in &request.sets {
+        let (id, text) = entry
+            .split_once('=')
+            .with_context(|| format!("{entry:?} is not ID=VALUE"))?;
+        let param = table.get(id.trim())?;
+        let value = parse_value(param, text.trim())?;
+        let before = read_value(param, &base.image)?;
+        println!(
+            "{:<28} {} -> {}",
+            param.id(),
+            param.describe(before),
+            param.describe(value)
+        );
+        writes.push(ParamWrite {
+            id: param.id().to_owned(),
+            value,
+        });
+    }
+    let mut image = apply_param_writes(
+        table,
+        &base.image,
+        &writes,
+        PROFILE.verify_rules.linked_types,
+    )?;
+    if let Some(patch_name) = &request.patch_name {
+        image.set_name(patch_name)?;
+    }
+    let key = preset_key(&request.name)?;
+    if !request.replace && presets.list()?.contains(&key) {
+        bail!("preset {key} already exists; pass --replace to overwrite it");
+    }
+    let changed = image.differing_offsets(&base.image).len();
+    let preset = Preset::new(
+        request.name.clone(),
+        base.model,
+        SystemClock.timestamp(),
+        image,
+    )?;
+    let encoded = encode_preset(&preset, PROFILE.temp_patch)?;
+    presets.write(&key, encoded.as_bytes())?;
+    println!(
+        "saved preset {:?} as {key} (patch name {:?}, {changed} byte(s) differ from {from_key})",
+        preset.name,
+        preset.image.name()
+    );
+    Ok(())
+}
+
+fn key_for(name: &str) -> Result<String> {
+    if Path::new(name)
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+    {
+        Ok(name.to_owned())
+    } else {
+        Ok(preset_key(name)?)
+    }
+}
+
+fn parse_value(param: &Param, text: &str) -> Result<u16> {
+    if let Ok(value) = text.parse::<u16>() {
+        if param.accepts(value) {
+            return Ok(value);
+        }
+        bail!("{} does not accept {value}", param.id());
+    }
+    (0..=VALUE_SEARCH_LIMIT)
+        .find(|value| param.accepts(*value) && param.describe(*value).eq_ignore_ascii_case(text))
+        .with_context(|| format!("{} has no value labelled {text:?}", param.id()))
+}
+
+fn read_value(param: &Param, image: &PatchImage) -> Result<u16> {
+    let offset = param.patch_offset()?;
+    let bytes = (0..u32::from(param.size()))
+        .map(|distance| image.get(offset.plus(distance)))
+        .collect::<Option<Vec<u8>>>()
+        .context("parameter lies outside the patch data")?;
+    Ok(param.decode(&bytes)?)
 }
 
 fn default_backup_key() -> String {

@@ -14,7 +14,7 @@ pub use command::{
     Command, DetectReport, DeviceInfo, Event, ParamWrite, PresetEntry, Stage, SwitchOutcome,
     WriteOutcome,
 };
-pub use engine::Engine;
+pub use engine::{Engine, apply_param_writes};
 pub use error::EngineError;
 #[cfg(feature = "native")]
 pub use native::{EngineHandle, FileStorage, SystemClock, default_data_dir, spawn};

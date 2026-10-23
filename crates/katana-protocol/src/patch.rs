@@ -221,6 +221,20 @@ impl PatchImage {
             .to_owned()
     }
 
+    pub fn set_name(&mut self, name: &str) -> Result<(), ProtocolError> {
+        let printable = name
+            .chars()
+            .all(|character| character.is_ascii() && !character.is_ascii_control());
+        if !printable || name.len() > NAME_LEN as usize {
+            return Err(ProtocolError::InvalidName(name.to_owned()));
+        }
+        let padded = format!("{name:<width$}", width = NAME_LEN as usize);
+        for (position, byte) in (0..NAME_LEN).zip(padded.bytes()) {
+            self.set(PatchOffset::from_linear(position), byte)?;
+        }
+        Ok(())
+    }
+
     pub fn to_packets(&self, base: Address) -> Result<Vec<Dt1>, ProtocolError> {
         let mut packets = Vec::new();
         for span in self.layout.returned() {

@@ -51,6 +51,17 @@ pub enum Action {
         name: String,
     },
     PresetList,
+    PresetDerive {
+        from: String,
+        #[arg(long)]
+        name: String,
+        #[arg(long, value_name = "TEXT")]
+        patch_name: Option<String>,
+        #[arg(long = "set", value_name = "ID=VALUE")]
+        sets: Vec<String>,
+        #[arg(long)]
+        replace: bool,
+    },
     SwitchChannel {
         channel: Channel,
         #[arg(long)]
