@@ -18,10 +18,10 @@ use crate::blocks::{self, BlockSpec, Variant};
 use crate::bridge;
 use crate::dialogs::{self, SwitchChoice};
 use crate::i18n::{tr, trf};
-use crate::params_view::{self, OnChange, ParamsView, Structure};
+use crate::params_view::{self, Edit, OnChange, ParamsView, Structure};
 
 const EVENT_PUMP: Duration = Duration::from_millis(30);
-const WRITE_DEBOUNCE: Duration = Duration::from_millis(250);
+const CONTINUOUS_WRITE_DEBOUNCE: Duration = Duration::from_millis(150);
 const STATUS_DELAY: Duration = Duration::from_millis(300);
 
 type Handler = Box<dyn Fn(&Rc<Ui>)>;
@@ -111,7 +111,7 @@ pub struct Ui {
     jobs: RefCell<VecDeque<Job>>,
     updating: Rc<Cell<bool>>,
     pending: RefCell<BTreeMap<&'static str, u16>>,
-    debounce: Cell<u64>,
+    write_timers: RefCell<BTreeMap<&'static str, glib::SourceId>>,
     status_serial: Cell<u64>,
     closing: Cell<bool>,
     cards: RefCell<Vec<Card>>,
@@ -383,7 +383,7 @@ impl Ui {
             jobs: RefCell::new(VecDeque::new()),
             updating: Rc::new(Cell::new(false)),
             pending: RefCell::new(BTreeMap::new()),
-            debounce: Cell::new(0),
+            write_timers: RefCell::new(BTreeMap::new()),
             status_serial: Cell::new(0),
             closing: Cell::new(false),
             cards: RefCell::new(Vec::new()),
@@ -427,7 +427,7 @@ impl Ui {
     fn on_close_request(&self) -> glib::Propagation {
         if !self.pending.borrow().is_empty() || self.is_busy() {
             self.closing.set(true);
-            self.flush_writes();
+            self.flush_writes_now();
             self.show_status_now(&tr("Finishing before closing…"));
             return glib::Propagation::Stop;
         }
@@ -645,6 +645,7 @@ impl Ui {
             model.baseline = None;
             model.failed_detect = false;
         }
+        self.drop_pending_writes("amp detected");
         if supported {
             self.send(Command::ReadTemp, Job::ReadTemp);
         }
@@ -681,7 +682,7 @@ impl Ui {
                 ));
             }
             (Some(Job::WriteParams), _) => {
-                self.pending.borrow_mut().clear();
+                self.drop_pending_writes("write failed");
                 self.toast(&trf(
                     "Could not write the change: {error}",
                     &[("error", &error.to_string())],
@@ -746,6 +747,7 @@ impl Ui {
             from_dump = switch.from_dump,
             "following channel change made on the amp"
         );
+        self.drop_pending_writes("channel changed on the amp");
         {
             let mut model = self.model.borrow_mut();
             model.channel = Some(switch.channel);
@@ -788,35 +790,92 @@ impl Ui {
         }
     }
 
-    fn queue_write(self: &Rc<Self>, id: &'static str, value: u16) {
-        if !self.can_write() {
+    fn edit_param(self: &Rc<Self>, id: &'static str, edit: Edit) {
+        if self.updating.get() || !self.can_write() {
             return;
         }
-        self.pending.borrow_mut().insert(id, value);
-        self.refresh_header();
-        let generation = self.debounce.get().wrapping_add(1);
-        self.debounce.set(generation);
+        match edit {
+            Edit::Discrete(value) => {
+                self.cancel_write_timer(id);
+                self.pending.borrow_mut().insert(id, value);
+                self.refresh_header();
+                self.flush_writes();
+            }
+            Edit::Continuous(value) => {
+                self.pending.borrow_mut().insert(id, value);
+                self.refresh_header();
+                self.schedule_write(id);
+            }
+            Edit::Released => {
+                if self.pending.borrow().contains_key(id) {
+                    self.cancel_write_timer(id);
+                    self.flush_writes();
+                }
+            }
+        }
+    }
+
+    fn schedule_write(self: &Rc<Self>, id: &'static str) {
+        self.cancel_write_timer(id);
         let ui = Rc::downgrade(self);
-        glib::timeout_add_local_once(WRITE_DEBOUNCE, move || {
-            if let Some(ui) = ui.upgrade()
-                && ui.debounce.get() == generation
-            {
+        let source = glib::timeout_add_local_once(CONTINUOUS_WRITE_DEBOUNCE, move || {
+            if let Some(ui) = ui.upgrade() {
+                ui.write_timers.borrow_mut().remove(id);
                 ui.flush_writes();
             }
         });
+        self.write_timers.borrow_mut().insert(id, source);
+    }
+
+    fn cancel_write_timer(&self, id: &str) {
+        if let Some(source) = self.write_timers.borrow_mut().remove(id) {
+            source.remove();
+        }
+    }
+
+    fn cancel_write_timers(&self) {
+        let timers = std::mem::take(&mut *self.write_timers.borrow_mut());
+        for source in timers.into_values() {
+            source.remove();
+        }
+    }
+
+    fn drop_pending_writes(&self, reason: &str) {
+        self.cancel_write_timers();
+        let dropped = std::mem::take(&mut *self.pending.borrow_mut());
+        if !dropped.is_empty() {
+            tracing::info!(?dropped, reason, "dropping unsent parameter changes");
+        }
+    }
+
+    fn flush_writes_now(&self) {
+        self.cancel_write_timers();
+        if !self.can_write() {
+            return;
+        }
+        let writes = self.take_pending_writes();
+        if writes.is_empty() {
+            return;
+        }
+        tracing::info!(?writes, "writing parameters before the next step");
+        self.send(Command::WriteParams(writes), Job::WriteParams);
+    }
+
+    fn take_pending_writes(&self) -> Vec<ParamWrite> {
+        std::mem::take(&mut *self.pending.borrow_mut())
+            .into_iter()
+            .map(|(id, value)| ParamWrite {
+                id: id.to_owned(),
+                value,
+            })
+            .collect()
     }
 
     fn flush_writes(&self) {
         if self.is_busy() || !self.can_write() {
             return;
         }
-        let writes: Vec<ParamWrite> = std::mem::take(&mut *self.pending.borrow_mut())
-            .into_iter()
-            .map(|(id, value)| ParamWrite {
-                id: id.to_owned(),
-                value,
-            })
-            .collect();
+        let writes = self.take_pending_writes();
         if writes.is_empty() {
             return;
         }
@@ -831,11 +890,13 @@ impl Ui {
     }
 
     fn backup_temp(&self) {
+        self.flush_writes_now();
         let key = format!("temp-{}.syx", Self::timestamp());
         self.send(Command::BackupTemp { key }, Job::Backup { then: None });
     }
 
     fn backup_then(&self, follow_up: FollowUp) {
+        self.flush_writes_now();
         let reason = match follow_up {
             FollowUp::ApplyPreset { .. } => "preset",
             FollowUp::Restore { .. } => "restore",
@@ -890,6 +951,7 @@ impl Ui {
             let save_ui = Rc::clone(&ui);
             let save_name = name.clone();
             let save = move || {
+                save_ui.flush_writes_now();
                 save_ui.model.borrow_mut().pending_switch = then_switch;
                 save_ui.send(
                     Command::SavePreset {
@@ -924,7 +986,7 @@ impl Ui {
     }
 
     fn switch_now(&self, channel: Channel) {
-        self.pending.borrow_mut().clear();
+        self.drop_pending_writes("switching channel");
         self.send(Command::SwitchChannel(channel), Job::Switch(channel));
     }
 
@@ -1216,7 +1278,7 @@ impl Ui {
             let write_ui = Rc::clone(self);
             switch.connect_active_notify(move |switch| {
                 if !write_ui.updating.get() {
-                    write_ui.queue_write(id, u16::from(switch.is_active()));
+                    write_ui.edit_param(id, Edit::Discrete(u16::from(switch.is_active())));
                 }
             });
             root.append(&switch);
@@ -1259,9 +1321,9 @@ impl Ui {
             return;
         }
         let weak = Rc::downgrade(self);
-        let on_change: OnChange = Rc::new(move |id, value| {
+        let on_change: OnChange = Rc::new(move |id, edit| {
             if let Some(ui) = weak.upgrade() {
-                ui.queue_write(id, value);
+                ui.edit_param(id, edit);
             }
         });
         let view = params_view::build(

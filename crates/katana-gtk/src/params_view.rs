@@ -12,7 +12,14 @@ const SPIN_THRESHOLD: u16 = 127;
 pub const CONTENT_WIDTH: i32 = 680;
 pub const CONTENT_TIGHTENING: i32 = 400;
 
-pub type OnChange = Rc<dyn Fn(&'static str, u16)>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Edit {
+    Discrete(u16),
+    Continuous(u16),
+    Released,
+}
+
+pub type OnChange = Rc<dyn Fn(&'static str, Edit)>;
 
 type Updater = Box<dyn Fn(u16)>;
 
@@ -185,7 +192,7 @@ fn switch_row(
     let callback = Rc::clone(on_change);
     row.connect_active_notify(move |row| {
         if !handler_guard.get() {
-            callback(id, u16::from(row.is_active()));
+            callback(id, Edit::Discrete(u16::from(row.is_active())));
         }
     });
     let target = row.clone();
@@ -231,7 +238,7 @@ fn combo_row(
             .ok()
             .and_then(|index| options.get(index));
         if let Some(option) = chosen {
-            callback(id, option.value);
+            callback(id, Edit::Discrete(option.value));
         }
     });
     let target = row.clone();
@@ -305,7 +312,7 @@ fn variant_row(
             .ok()
             .and_then(|index| handler_values.get(index));
         if let Some(&value) = chosen {
-            callback(id, value);
+            callback(id, Edit::Discrete(value));
         }
     });
     let row = adw::ActionRow::builder()
@@ -372,11 +379,25 @@ fn scale_row(
     let handler_guard = Rc::clone(guard);
     let callback = Rc::clone(on_change);
     let handler_label = value_label.clone();
+    let release = gtk::EventControllerLegacy::new();
+    let release_guard = Rc::clone(guard);
+    let release_callback = Rc::clone(on_change);
+    release.connect_event(move |_, event| {
+        let ended = matches!(
+            event.event_type(),
+            gtk::gdk::EventType::ButtonRelease | gtk::gdk::EventType::TouchEnd
+        );
+        if ended && !release_guard.get() {
+            release_callback(id, Edit::Released);
+        }
+        gtk::glib::Propagation::Proceed
+    });
+    scale.add_controller(release);
     scale.connect_value_changed(move |scale| {
         let raw = to_raw(scale.value());
         handler_label.set_text(&param.describe(raw));
         if !handler_guard.get() {
-            callback(id, raw);
+            callback(id, Edit::Continuous(raw));
         }
     });
     (
@@ -406,7 +427,7 @@ fn spin_row(
         let raw = to_raw(row.value());
         row.set_subtitle(&param.describe(raw));
         if !handler_guard.get() {
-            callback(id, raw);
+            callback(id, Edit::Continuous(raw));
         }
     });
     let target = row.clone();
