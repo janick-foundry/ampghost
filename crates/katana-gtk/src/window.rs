@@ -1107,21 +1107,26 @@ impl Ui {
             .filter(|spec| spec.chain_label.is_some())
             .count();
         for (index, spec) in order.iter().enumerate() {
-            if index > 0 {
-                let separator = if index == chained {
-                    gtk::Separator::new(gtk::Orientation::Vertical).upcast::<gtk::Widget>()
-                } else {
-                    gtk::Image::builder()
-                        .icon_name("go-next-symbolic")
-                        .css_classes(["chain-arrow"])
-                        .build()
-                        .upcast::<gtk::Widget>()
-                };
-                separator.set_margin_start(2);
-                separator.set_margin_end(2);
+            if index > 0 && index < chained {
+                let arrow = gtk::Image::builder()
+                    .icon_name("go-next-symbolic")
+                    .css_classes(["chain-arrow"])
+                    .margin_start(2)
+                    .margin_end(2)
+                    .build();
+                self.chain_box.append(&arrow);
+            } else if index > 0 && index == chained {
+                let separator = gtk::Separator::builder()
+                    .orientation(gtk::Orientation::Vertical)
+                    .margin_start(8)
+                    .margin_end(8)
+                    .build();
                 self.chain_box.append(&separator);
             }
             let card = self.make_card(spec);
+            if spec.chain_label.is_none() {
+                card.root.add_css_class("chain-extra");
+            }
             self.chain_box.append(&card.root);
             cards.push(card);
         }
