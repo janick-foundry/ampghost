@@ -101,6 +101,7 @@ pub struct Ui {
     status_page: adw::StatusPage,
     retry_button: gtk::Button,
     chain_box: gtk::Box,
+    extras_box: gtk::Box,
     params_holder: adw::Bin,
     preset_list: gtk::ListBox,
     preset_search: gtk::SearchEntry,
@@ -252,35 +253,70 @@ fn main_menu() -> gio::Menu {
     menu
 }
 
+fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
+    let chain_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .css_classes(["chain-row"])
+        .build();
+    let chain_scroller = gtk::ScrolledWindow::builder()
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .hexpand(true)
+        .child(&chain_box)
+        .build();
+    let extras_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .css_classes(["chain-row"])
+        .build();
+    let chain_section = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .hexpand(true)
+        .build();
+    chain_section.append(&section_heading(&tr("Signal Chain")));
+    chain_section.append(&chain_scroller);
+    let extras_section = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .build();
+    extras_section.append(&section_heading(&tr("Output")));
+    extras_section.append(&extras_box);
+    let blocks_row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .build();
+    blocks_row.append(&chain_section);
+    blocks_row.append(
+        &gtk::Separator::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .margin_top(12)
+            .margin_bottom(12)
+            .build(),
+    );
+    blocks_row.append(&extras_section);
+    (blocks_row, chain_box, extras_box)
+}
+
+fn section_heading(text: &str) -> gtk::Label {
+    gtk::Label::builder()
+        .label(text)
+        .xalign(0.0)
+        .margin_start(16)
+        .margin_top(12)
+        .css_classes(["heading"])
+        .build()
+}
+
 impl Ui {
     fn build(app: &adw::Application, table: &'static ParamTable, engine: EngineHandle) -> Rc<Self> {
         let (header, title, status_box, status_label, sidebar_button) = build_header();
         let (channel_section, channel_buttons) = build_channels();
         let (sidebar, preset_search, preset_list) = build_sidebar();
-        let chain_box = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(6)
-            .css_classes(["chain-row"])
-            .build();
-        let chain_scroller = gtk::ScrolledWindow::builder()
-            .vscrollbar_policy(gtk::PolicyType::Never)
-            .child(&chain_box)
-            .build();
+        let (blocks_row, chain_box, extras_box) = build_blocks_row();
         let params_holder = adw::Bin::builder().vexpand(true).build();
         let editor = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .build();
         editor.append(&channel_section);
-        editor.append(
-            &gtk::Label::builder()
-                .label(tr("Signal Chain"))
-                .xalign(0.0)
-                .margin_start(16)
-                .margin_top(12)
-                .css_classes(["heading"])
-                .build(),
-        );
-        editor.append(&chain_scroller);
+        editor.append(&blocks_row);
         editor.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         editor.append(&params_holder);
 
@@ -315,8 +351,8 @@ impl Ui {
         let window = adw::ApplicationWindow::builder()
             .application(app)
             .title(tr("Katana Control"))
-            .default_width(1280)
-            .default_height(820)
+            .default_width(1920)
+            .default_height(1080)
             .content(&toasts)
             .build();
 
@@ -332,6 +368,7 @@ impl Ui {
             status_page,
             retry_button,
             chain_box,
+            extras_box,
             params_holder,
             preset_list,
             preset_search,
@@ -1098,36 +1135,28 @@ impl Ui {
     }
 
     fn rebuild_chain(self: &Rc<Self>, order: &[&'static BlockSpec]) {
-        while let Some(child) = self.chain_box.first_child() {
-            self.chain_box.remove(&child);
+        for container in [&self.chain_box, &self.extras_box] {
+            while let Some(child) = container.first_child() {
+                container.remove(&child);
+            }
         }
         let mut cards = Vec::new();
-        let chained = order
-            .iter()
-            .filter(|spec| spec.chain_label.is_some())
-            .count();
-        for (index, spec) in order.iter().enumerate() {
-            if index > 0 && index < chained {
-                let arrow = gtk::Image::builder()
-                    .icon_name("go-next-symbolic")
-                    .css_classes(["chain-arrow"])
-                    .margin_start(2)
-                    .margin_end(2)
-                    .build();
-                self.chain_box.append(&arrow);
-            } else if index > 0 && index == chained {
-                let separator = gtk::Separator::builder()
-                    .orientation(gtk::Orientation::Vertical)
-                    .margin_start(8)
-                    .margin_end(8)
-                    .build();
-                self.chain_box.append(&separator);
-            }
+        for spec in order {
             let card = self.make_card(spec);
             if spec.chain_label.is_none() {
-                card.root.add_css_class("chain-extra");
+                self.extras_box.append(&card.root);
+            } else {
+                if self.chain_box.first_child().is_some() {
+                    let arrow = gtk::Image::builder()
+                        .icon_name("go-next-symbolic")
+                        .css_classes(["chain-arrow"])
+                        .margin_start(2)
+                        .margin_end(2)
+                        .build();
+                    self.chain_box.append(&arrow);
+                }
+                self.chain_box.append(&card.root);
             }
-            self.chain_box.append(&card.root);
             cards.push(card);
         }
         *self.cards.borrow_mut() = cards;

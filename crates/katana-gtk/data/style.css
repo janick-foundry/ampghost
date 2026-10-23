@@ -17,12 +17,6 @@
   opacity: 0.55;
 }
 
-.chain-block.chain-extra {
-  background-color: color-mix(in srgb, var(--card-bg-color) 55%, transparent);
-  box-shadow: none;
-  border: 1px solid color-mix(in srgb, currentColor 8%, transparent);
-}
-
 .chain-arrow {
   opacity: 0.4;
 }
