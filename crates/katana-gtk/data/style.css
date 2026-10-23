@@ -49,4 +49,6 @@
 
 .channel-button {
   min-width: 44px;
+  min-height: 36px;
+  font-weight: bold;
 }

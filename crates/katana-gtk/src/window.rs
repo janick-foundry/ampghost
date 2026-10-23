@@ -253,8 +253,8 @@ fn main_menu() -> gio::Menu {
 
 impl Ui {
     fn build(app: &adw::Application, table: &'static ParamTable, engine: EngineHandle) -> Rc<Self> {
-        let (header, title, channel_buttons, status_box, status_label, sidebar_button) =
-            build_header();
+        let (header, title, status_box, status_label, sidebar_button) = build_header();
+        let (channel_section, channel_buttons) = build_channels();
         let (sidebar, preset_search, preset_list) = build_sidebar();
         let chain_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -269,6 +269,7 @@ impl Ui {
         let editor = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .build();
+        editor.append(&channel_section);
         editor.append(
             &gtk::Label::builder()
                 .label(tr("Signal Chain"))
@@ -1186,7 +1187,6 @@ fn writable(model: &Model) -> bool {
 type Header = (
     adw::HeaderBar,
     adw::WindowTitle,
-    Vec<(Channel, gtk::Button)>,
     gtk::Box,
     gtk::Label,
     gtk::ToggleButton,
@@ -1202,22 +1202,6 @@ fn build_header() -> Header {
         .active(true)
         .build();
     header.pack_start(&sidebar_button);
-    let channel_row = gtk::Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
-        .css_classes(["linked"])
-        .build();
-    let mut channel_buttons = Vec::new();
-    for channel in Channel::ALL {
-        let button = gtk::Button::builder()
-            .label(channel.label())
-            .css_classes(["channel-button"])
-            .action_name("win.switch-channel")
-            .action_target(&channel.label().to_variant())
-            .build();
-        channel_row.append(&button);
-        channel_buttons.push((channel, button));
-    }
-    header.pack_start(&channel_row);
     let menu_button = gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
         .menu_model(&main_menu())
@@ -1239,14 +1223,45 @@ fn build_header() -> Header {
     status_box.append(&status_label);
     header.pack_end(&status_box);
 
-    (
-        header,
-        title,
-        channel_buttons,
-        status_box,
-        status_label,
-        sidebar_button,
-    )
+    (header, title, status_box, status_label, sidebar_button)
+}
+
+fn build_channels() -> (gtk::Box, Vec<(Channel, gtk::Button)>) {
+    let channel_row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .homogeneous(true)
+        .hexpand(true)
+        .css_classes(["linked", "channel-row"])
+        .build();
+    let mut channel_buttons = Vec::new();
+    for channel in Channel::ALL {
+        let button = gtk::Button::builder()
+            .label(channel.label())
+            .hexpand(true)
+            .css_classes(["channel-button"])
+            .action_name("win.switch-channel")
+            .action_target(&channel.label().to_variant())
+            .build();
+        channel_row.append(&button);
+        channel_buttons.push((channel, button));
+    }
+    let section = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(8)
+        .margin_start(16)
+        .margin_end(16)
+        .margin_top(12)
+        .margin_bottom(4)
+        .build();
+    section.append(
+        &gtk::Label::builder()
+            .label(tr("Channel"))
+            .xalign(0.0)
+            .css_classes(["heading"])
+            .build(),
+    );
+    section.append(&channel_row);
+    (section, channel_buttons)
 }
 
 fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
