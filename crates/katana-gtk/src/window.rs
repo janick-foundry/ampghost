@@ -74,6 +74,7 @@ struct Model {
     device: Option<DeviceInfo>,
     channel: Option<Channel>,
     image: Option<PatchImage>,
+    baseline: Option<PatchImage>,
     presets: Vec<PresetEntry>,
     selected: &'static str,
     pending_switch: Option<Channel>,
@@ -513,7 +514,7 @@ impl Ui {
             }
             Event::ChannelSwitched(outcome) => {
                 self.model.borrow_mut().channel = Some(outcome.channel);
-                self.set_image(outcome.temp);
+                self.set_clean_image(outcome.temp);
                 let text = if outcome.attempts > 1 {
                     trf(
                         "Switched to {channel} after {attempts} attempts",
@@ -540,19 +541,12 @@ impl Ui {
                 }
             }
             Event::Restored { key, outcome } => {
-                self.set_image(outcome.image);
+                self.set_clean_image(outcome.image);
                 self.toast(&trf("Restored {key} to temp", &[("key", &key)]));
             }
-            Event::PresetSaved { name, .. } => {
-                self.toast(&trf("Saved preset “{name}”", &[("name", &name)]));
-                self.send(Command::ListPresets, Job::ListPresets);
-                let next = self.model.borrow_mut().pending_switch.take();
-                if let Some(channel) = next {
-                    self.switch_now(channel);
-                }
-            }
+            Event::PresetSaved { name, .. } => self.on_preset_saved(&name),
             Event::PresetApplied { name, outcome, .. } => {
-                self.set_image(outcome.image);
+                self.set_clean_image(outcome.image);
                 let text = if outcome.attempts > 1 {
                     trf(
                         "Applied “{name}” (verified after a retry)",
@@ -609,6 +603,7 @@ impl Ui {
             model.device = Some(report.device);
             model.channel = report.current_channel;
             model.image = None;
+            model.baseline = None;
             model.failed_detect = false;
         }
         if supported {
@@ -623,6 +618,7 @@ impl Ui {
                 let mut model = self.model.borrow_mut();
                 model.device = None;
                 model.image = None;
+                model.baseline = None;
                 model.failed_detect = true;
             }
             (Some(Job::Switch(channel)), _) => {
@@ -661,8 +657,48 @@ impl Ui {
         }
     }
 
+    fn on_preset_saved(&self, name: &str) {
+        {
+            let mut model = self.model.borrow_mut();
+            let image = model.image.clone();
+            model.baseline = image;
+        }
+        self.toast(&trf("Saved preset “{name}”", &[("name", name)]));
+        self.send(Command::ListPresets, Job::ListPresets);
+        let next = self.model.borrow_mut().pending_switch.take();
+        if let Some(channel) = next {
+            self.switch_now(channel);
+        }
+    }
+
     fn set_image(&self, image: PatchImage) {
-        self.model.borrow_mut().image = Some(image);
+        let mut model = self.model.borrow_mut();
+        if model.baseline.is_none() {
+            model.baseline = Some(image.clone());
+        }
+        model.image = Some(image);
+    }
+
+    fn set_clean_image(&self, image: PatchImage) {
+        let mut model = self.model.borrow_mut();
+        model.baseline = Some(image.clone());
+        model.image = Some(image);
+    }
+
+    fn is_dirty(&self) -> bool {
+        if !self.pending.borrow().is_empty() {
+            return true;
+        }
+        let model = self.model.borrow();
+        let profile = model.device.as_ref().and_then(|device| device.profile);
+        match (&model.image, &model.baseline) {
+            (Some(image), Some(baseline)) => {
+                image.differing_offsets(baseline).iter().any(|offset| {
+                    profile.is_none_or(|profile| !profile.verify_rules.is_amp_derived(*offset))
+                })
+            }
+            _ => false,
+        }
     }
 
     fn follow_amp_switch(self: &Rc<Self>, switch: AmpSwitch) {
@@ -674,6 +710,7 @@ impl Ui {
         {
             let mut model = self.model.borrow_mut();
             model.channel = Some(switch.channel);
+            model.baseline = Some(switch.temp.clone());
             model.image = Some(switch.temp);
         }
         self.refresh_all();
@@ -717,6 +754,7 @@ impl Ui {
             return;
         }
         self.pending.borrow_mut().insert(id, value);
+        self.refresh_header();
         let generation = self.debounce.get().wrapping_add(1);
         self.debounce.set(generation);
         let ui = Rc::downgrade(self);
@@ -833,6 +871,12 @@ impl Ui {
         if !self.can_write() || self.is_busy() {
             return;
         }
+        if !self.is_dirty() {
+            tracing::info!(%channel, "temp unchanged, switching without asking");
+            self.switch_now(channel);
+            return;
+        }
+        tracing::info!(%channel, "temp edited, asking before switching");
         let ui = Rc::clone(self);
         dialogs::confirm_switch(&self.window, channel, move |choice| match choice {
             SwitchChoice::Switch => ui.switch_now(channel),
@@ -898,14 +942,19 @@ impl Ui {
     }
 
     fn refresh_header(&self) {
+        let dirty = self.is_dirty();
         let model = self.model.borrow();
         let patch = model
             .image
             .as_ref()
             .map(PatchImage::name)
             .filter(|name| !name.is_empty());
-        self.title
-            .set_title(&patch.unwrap_or_else(|| tr("Katana Control")));
+        let title = match patch {
+            Some(name) if dirty => trf("{name} • Edited", &[("name", &name)]),
+            Some(name) => name,
+            None => tr("Katana Control"),
+        };
+        self.title.set_title(&title);
         let status = match &model.device {
             None => tr("Not connected"),
             Some(device) if device.is_supported() => {
