@@ -1,0 +1,16 @@
+Katana Control
+Copyright (C) 2026 Jan Klíma
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. See LICENSE.
+
+Third-party material
+--------------------
+
+Parameter maps in crates/katana-params/data/params.json are derived from Katana Mk2 FxFloorBoard
+by Colin Willcocks (gumtown), which is distributed under the GNU General Public License.
+Full attribution, source location and checksums are in crates/katana-params/NOTICE.
+
+BOSS and KATANA are trademarks of Roland Corporation. This project is not affiliated with or
+endorsed by Roland Corporation.

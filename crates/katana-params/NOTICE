@@ -1,0 +1,32 @@
+katana-params: parameter maps for the BOSS Katana MK II
+=======================================================
+
+The file data/params.json is derived from Katana Mk2 FxFloorBoard.
+
+Author:   Colin Willcocks (gumtown)
+Project:  Katana Mk2 FxFloorBoard
+Source:   https://sourceforge.net/projects/fxfloorboard/files/KatanaFxFloorBoard/Katana%20FxFloorboard%20for%20MK2%20Desktop/
+Archive:  Katana_Mk2_FxFloorBoard_source_code_20240515.zip
+          sha256 670b8c10733e1b2bedcfba6fc9259e524734c1c5fe2134911153b549088f6dbf
+Input:    midi.xml from that archive, version 2.02
+          sha256 (UTF-16 original) c14ac5bb914f5496634d87442aae35876eed02d26b715c7e96218171cfb1ccd5
+          sha256 (UTF-8 conversion) d56e6503e86b22897acd54ac4e93168f5892b2a6dfda78f0a91d331cc218d7a5
+
+Source license notes
+--------------------
+
+The FxFloorBoard source files carry GPL version 2 or later headers and the archive ships the
+GPL version 3 text as license.txt. midi.xml itself carries an "All rights reserved" line without
+an explicit license of its own; it is treated as part of the GPL-licensed program. The derived
+data in this crate is distributed under GPL-3.0-or-later together with the rest of Katana Control.
+Residual risk: should the copyright holder consider midi.xml separately licensed, the derived
+table would have to be replaced with independently researched data.
+
+Changes made to the derived data
+--------------------------------
+
+* Addresses, sizes, ranges and labels were converted into a flat JSON table (699 parameters).
+* patch_size corrected from 3912 to 1992 (RQ1 size 00 00 0F 48, as measured on the amp).
+* The variant_select_values table was removed; type/variant linkage lives in katana-protocol.
+* Each entry is tagged "research" ([R], taken from FxFloorBoard) unless it was verified on a real
+  Katana 50 MK II ([V], with the verification date).

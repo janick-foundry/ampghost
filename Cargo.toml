@@ -1,0 +1,55 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/katana-protocol",
+    "crates/katana-params",
+    "crates/katana-midi",
+    "crates/katana-store",
+    "crates/katana-engine",
+    "crates/katana-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "GPL-3.0-or-later"
+authors = ["Jan Klíma <140242059+janick-foundry@users.noreply.github.com>"]
+publish = false
+
+[workspace.dependencies]
+katana-protocol = { path = "crates/katana-protocol" }
+katana-params = { path = "crates/katana-params" }
+katana-midi = { path = "crates/katana-midi", default-features = false }
+katana-store = { path = "crates/katana-store" }
+katana-engine = { path = "crates/katana-engine", default-features = false }
+thiserror = "2.0.21"
+anyhow = "1.0.104"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+midir = "0.11.1"
+clap = { version = "4.6.7", features = ["derive"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+humantime = "2.4.0"
+directories = "6.0.0"
+sha2 = "0.11.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+dbg_macro = "deny"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+return_self_not_must_use = "allow"
