@@ -262,59 +262,66 @@ fn variant_row(
     if variants.len() != options.len() {
         return combo_row(param, options, title, guard, on_change);
     }
-    let selector = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
+    let group = adw::ToggleGroup::builder()
         .valign(gtk::Align::Center)
-        .margin_top(6)
-        .margin_bottom(6)
-        .css_classes(["linked", "variant-selector"])
+        .homogeneous(true)
+        .css_classes(["variant-selector"])
         .build();
-    selector.update_property(&[gtk::accessible::Property::Label(title)]);
-    let id = param.id();
-    let mut buttons: Vec<(u16, gtk::ToggleButton)> = Vec::new();
+    group
+        .upcast_ref::<gtk::Widget>()
+        .update_property(&[gtk::accessible::Property::Label(title)]);
+    let values: Vec<u16> = variants.iter().map(|(option, _)| option.value).collect();
     for (option, variant) in variants {
+        let label = blocks::pretty_label(&option.label);
         let dot = gtk::Box::builder()
             .css_classes(["variant-dot", variant.css_class()])
             .valign(gtk::Align::Center)
             .build();
-        let label = blocks::pretty_label(&option.label);
         let content = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
+            .halign(gtk::Align::Center)
             .build();
         content.append(&dot);
-        content.append(&gtk::Label::builder().label(&label).xalign(0.0).build());
-        let button = gtk::ToggleButton::builder()
-            .child(&content)
-            .tooltip_text(tr(variant.title()))
-            .css_classes(["variant-option"])
-            .build();
-        button.update_property(&[gtk::accessible::Property::Label(&label)]);
-        if let Some((_, first)) = buttons.first() {
-            button.set_group(Some(first));
-        }
-        let handler_guard = Rc::clone(guard);
-        let callback = Rc::clone(on_change);
-        let value = option.value;
-        button.connect_toggled(move |button| {
-            if button.is_active() && !handler_guard.get() {
-                callback(id, value);
-            }
-        });
-        selector.append(&button);
-        buttons.push((value, button));
+        content.append(&gtk::Label::new(Some(&label)));
+        group.add(
+            adw::Toggle::builder()
+                .child(&content)
+                .label(label.as_str())
+                .description(label.as_str())
+                .tooltip(tr(variant.title()))
+                .build(),
+        );
     }
+    let id = param.id();
+    let handler_guard = Rc::clone(guard);
+    let callback = Rc::clone(on_change);
+    let handler_values = values.clone();
+    group.connect_active_notify(move |group| {
+        if handler_guard.get() {
+            return;
+        }
+        let chosen = usize::try_from(group.active())
+            .ok()
+            .and_then(|index| handler_values.get(index));
+        if let Some(&value) = chosen {
+            callback(id, value);
+        }
+    });
     let row = adw::ActionRow::builder()
         .title(title)
         .use_markup(false)
         .build();
-    row.add_suffix(&selector);
+    row.add_suffix(&group);
     (
         row.upcast(),
         Box::new(move |value| {
-            for (option, button) in &buttons {
-                button.set_active(*option == value);
-            }
+            let position = values
+                .iter()
+                .position(|&option| option == value)
+                .and_then(|index| u32::try_from(index).ok())
+                .unwrap_or(gtk::INVALID_LIST_POSITION);
+            group.set_active(position);
         }),
     )
 }

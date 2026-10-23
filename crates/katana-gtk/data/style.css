@@ -43,16 +43,11 @@
   background-color: alpha(currentColor, 0.15);
 }
 
-.variant-option {
-  min-width: 112px;
-  padding: 6px 14px;
+.variant-selector toggle {
+  min-width: 88px;
 }
 
-.variant-option:checked {
-  font-weight: bold;
-}
-
-.variant-option:not(:checked) .variant-dot {
+.variant-selector toggle:not(:checked) .variant-dot {
   opacity: 0.45;
 }
 
