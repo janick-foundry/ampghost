@@ -1,0 +1,28 @@
+[package]
+name = "katana-cli"
+description = "Internal diagnostic command line tool for Katana Control"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "katana-cli"
+path = "src/main.rs"
+
+[dependencies]
+katana-engine = { workspace = true, features = ["native"] }
+katana-midi = { workspace = true, features = ["native"] }
+katana-params.workspace = true
+katana-protocol.workspace = true
+katana-store.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+sha2.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
