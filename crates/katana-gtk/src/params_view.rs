@@ -84,7 +84,7 @@ pub fn build(
     if !structure.writable {
         main.set_description(Some(&tr("Writing is disabled.")));
     }
-    let leading = [spec.on_param, spec.type_param, spec.select_param];
+    let leading = [spec.on_param, spec.select_param, spec.type_param];
     for id in leading.into_iter().flatten() {
         let Ok(param) = table.get(id) else {
             continue;
