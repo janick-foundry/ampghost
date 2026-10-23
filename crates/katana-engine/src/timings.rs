@@ -9,6 +9,7 @@ pub struct Timings {
     pub settle: Duration,
     pub channel_settle: Duration,
     pub channel_attempts: u8,
+    pub program_change_holdoff: Duration,
 }
 
 impl Default for Timings {
@@ -21,6 +22,7 @@ impl Default for Timings {
             settle: Duration::from_millis(300),
             channel_settle: Duration::from_millis(700),
             channel_attempts: 3,
+            program_change_holdoff: Duration::from_millis(3000),
         }
     }
 }

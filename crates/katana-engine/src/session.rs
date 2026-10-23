@@ -18,6 +18,7 @@ pub(crate) struct Session {
     timings: Timings,
     device: DeviceInfo,
     unsolicited: Vec<Dt1>,
+    program_change_ready: Option<Instant>,
 }
 
 impl Session {
@@ -52,6 +53,7 @@ impl Session {
                         profile,
                     },
                     unsolicited: Vec::new(),
+                    program_change_ready: None,
                 });
             }
         }
@@ -151,6 +153,7 @@ impl Session {
         let profile = self.profile()?;
         let started = self.clock.now();
         let packets = self.request(profile.read_temp_request())?;
+        self.hold_off_program_change();
         let image = PatchImage::from_packets(&profile.patch_layout, profile.temp_patch, &packets)?;
         tracing::debug!(
             packets = packets.len(),
@@ -181,6 +184,26 @@ impl Session {
             tracing::debug!(%packet, "write");
             self.transport.send(&packet.encode())?;
             self.drain(self.timings.packet_gap)?;
+        }
+        self.hold_off_program_change();
+        Ok(())
+    }
+
+    fn hold_off_program_change(&mut self) {
+        self.program_change_ready = Some(self.clock.now() + self.timings.program_change_holdoff);
+    }
+
+    fn wait_for_program_change(&mut self) -> Result<(), EngineError> {
+        let Some(ready) = self.program_change_ready else {
+            return Ok(());
+        };
+        let wait = ready.saturating_duration_since(self.clock.now());
+        if !wait.is_zero() {
+            tracing::info!(
+                millis = wait.as_millis(),
+                "waiting for amp to accept program change"
+            );
+            self.drain(wait)?;
         }
         Ok(())
     }
@@ -267,8 +290,10 @@ impl Session {
         tracing::info!(%channel, program, "program change map");
         let mut actual = None;
         for attempt in 1..=self.timings.channel_attempts {
+            self.wait_for_program_change()?;
             sink(Event::Progress(Stage::ProgramChange { program, attempt }));
             self.transport.send(&program_change(program))?;
+            self.hold_off_program_change();
             self.drain(self.timings.channel_settle)?;
             let current = self.read_current_channel()?;
             tracing::info!(%current, attempt, "channel readback");
