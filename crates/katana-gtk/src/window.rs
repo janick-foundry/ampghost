@@ -257,6 +257,7 @@ fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
     let chain_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(6)
+        .margin_bottom(14)
         .css_classes(["chain-row"])
         .build();
     let chain_scroller = gtk::ScrolledWindow::builder()
@@ -267,6 +268,7 @@ fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
     let extras_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(6)
+        .margin_bottom(14)
         .css_classes(["chain-row"])
         .build();
     let chain_section = gtk::Box::builder()
