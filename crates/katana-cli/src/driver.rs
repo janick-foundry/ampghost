@@ -175,13 +175,20 @@ impl Driver {
                         "switching the channel replaces the temp patch; pass --discard-temp to confirm"
                     );
                 }
+                let started = std::time::Instant::now();
                 match self.request(Command::SwitchChannel(channel))? {
                     Event::ChannelSwitched(outcome) => {
                         println!(
-                            "channel:    {} (PC {}, {} attempt(s))",
-                            outcome.channel, outcome.program, outcome.attempts
+                            "channel:    {} (PC {}, {} attempt(s), {} ms)",
+                            outcome.channel,
+                            outcome.program,
+                            outcome.attempts,
+                            started.elapsed().as_millis()
                         );
-                        println!("temp name:  {}", outcome.temp.name());
+                        print_image(
+                            &outcome.temp,
+                            &encode_syx(&outcome.temp, PROFILE.temp_patch)?,
+                        );
                     }
                     other => bail!("unexpected engine event {other:?}"),
                 }

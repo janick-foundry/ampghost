@@ -91,7 +91,13 @@ impl Dt1 {
 
 impl fmt::Display for Dt1 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "DT1 {} [{} B]", self.address, self.data.len())
+        write!(f, "DT1 {} [{} B]", self.address, self.data.len())?;
+        if self.data.len() <= 4 {
+            for byte in &self.data {
+                write!(f, " {byte:02X}")?;
+            }
+        }
+        Ok(())
     }
 }
 
