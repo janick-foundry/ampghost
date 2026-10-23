@@ -1,0 +1,52 @@
+.chain-row {
+  padding: 12px;
+}
+
+.chain-block {
+  padding: 10px 12px;
+  min-width: 104px;
+}
+
+.chain-block.selected {
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
+}
+
+.chain-block.block-off .block-title,
+.chain-block.block-off .block-type {
+  opacity: 0.55;
+}
+
+.chain-arrow {
+  opacity: 0.4;
+}
+
+.variant-dot {
+  min-width: 12px;
+  min-height: 12px;
+  border-radius: 6px;
+}
+
+.variant-green {
+  background-color: var(--success-color);
+}
+
+.variant-red {
+  background-color: var(--error-color);
+}
+
+.variant-yellow {
+  background-color: var(--warning-color);
+}
+
+.variant-none {
+  background-color: alpha(currentColor, 0.15);
+}
+
+.status-label {
+  font-feature-settings: "tnum";
+}
+
+.channel-button {
+  min-width: 44px;
+}

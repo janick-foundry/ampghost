@@ -7,6 +7,7 @@ members = [
     "crates/katana-store",
     "crates/katana-engine",
     "crates/katana-cli",
+    "crates/katana-gtk",
 ]
 
 [workspace.package]
@@ -28,6 +29,10 @@ anyhow = "1.0.104"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 midir = "0.11.1"
+gtk = { package = "gtk4", version = "0.11.5", features = ["v4_22"] }
+adw = { package = "libadwaita", version = "0.9.2", features = ["v1_9"] }
+gettext-rs = { version = "0.8.0", features = ["gettext-system"] }
+glib-build-tools = "0.22.8"
 clap = { version = "4.6.7", features = ["derive"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

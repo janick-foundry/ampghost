@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/io/github/janfoundry/KatanaControl">
+    <file>style.css</file>
+    <file alias="icons/scalable/apps/io.github.janfoundry.KatanaControl.svg">icons/hicolor/scalable/apps/io.github.janfoundry.KatanaControl.svg</file>
+    <file alias="icons/symbolic/apps/io.github.janfoundry.KatanaControl-symbolic.svg">icons/hicolor/symbolic/apps/io.github.janfoundry.KatanaControl-symbolic.svg</file>
+  </gresource>
+</gresources>
