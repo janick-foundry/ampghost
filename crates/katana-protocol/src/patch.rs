@@ -146,6 +146,59 @@ pub struct PatchImage {
     data: Vec<u8>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PatchAssembler {
+    layout: &'static PatchLayout,
+    base: Address,
+    data: Vec<u8>,
+    filled: Vec<bool>,
+}
+
+impl PatchAssembler {
+    pub fn new(layout: &'static PatchLayout, base: Address) -> Self {
+        Self {
+            layout,
+            base,
+            data: vec![0; layout.data_len()],
+            filled: vec![false; layout.data_len()],
+        }
+    }
+
+    pub fn add(&mut self, packet: &Dt1) -> bool {
+        let Some(start) = packet.address().distance_from(self.base) else {
+            return false;
+        };
+        let mut used = false;
+        for (position, &value) in (start..).zip(packet.data()) {
+            if let Some(index) = self.layout.index_of(PatchOffset::from_linear(position))
+                && let (Some(slot), Some(flag)) =
+                    (self.data.get_mut(index), self.filled.get_mut(index))
+            {
+                *slot = value;
+                *flag = true;
+                used = true;
+            }
+        }
+        used
+    }
+
+    pub fn missing(&self) -> usize {
+        self.filled.iter().filter(|flag| !**flag).count()
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.filled.iter().all(|flag| *flag)
+    }
+
+    pub fn finish(self) -> Result<PatchImage, ProtocolError> {
+        let missing = self.missing();
+        if missing > 0 {
+            return Err(ProtocolError::IncompleteImage { missing });
+        }
+        PatchImage::from_data(self.layout, self.data)
+    }
+}
+
 impl PatchImage {
     pub fn from_data(layout: &'static PatchLayout, data: Vec<u8>) -> Result<Self, ProtocolError> {
         if data.len() != layout.data_len() {
@@ -163,26 +216,11 @@ impl PatchImage {
         base: Address,
         packets: &[Dt1],
     ) -> Result<Self, ProtocolError> {
-        let mut data = vec![0_u8; layout.data_len()];
-        let mut filled = vec![false; layout.data_len()];
+        let mut assembler = PatchAssembler::new(layout, base);
         for packet in packets {
-            let Some(start) = packet.address().distance_from(base) else {
-                continue;
-            };
-            for (position, &value) in (start..).zip(packet.data()) {
-                if let Some(index) = layout.index_of(PatchOffset::from_linear(position))
-                    && let (Some(slot), Some(flag)) = (data.get_mut(index), filled.get_mut(index))
-                {
-                    *slot = value;
-                    *flag = true;
-                }
-            }
+            assembler.add(packet);
         }
-        let missing = filled.iter().filter(|flag| !**flag).count();
-        if missing > 0 {
-            return Err(ProtocolError::IncompleteImage { missing });
-        }
-        Ok(Self { layout, data })
+        assembler.finish()
     }
 
     pub const fn layout(&self) -> &'static PatchLayout {

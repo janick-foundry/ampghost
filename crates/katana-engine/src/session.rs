@@ -3,12 +3,13 @@ use std::time::{Duration, Instant};
 
 use katana_midi::MidiTransport;
 use katana_protocol::{
-    Channel, DeviceProfile, Dt1, IDENTITY_REQUEST, Incoming, PatchImage, PatchOffset,
-    ProgramChangeMap, Rq1, decode, parse_current_channel, profile_for, program_change, verify,
+    Channel, DeviceProfile, Dt1, IDENTITY_REQUEST, Incoming, PatchAssembler, PatchImage,
+    PatchOffset, ProgramChangeMap, ProtocolError, Rq1, decode, parse_current_channel, profile_for,
+    program_change, verify,
 };
 
 use crate::clock::Clock;
-use crate::command::{DeviceInfo, Event, Stage, SwitchOutcome, WriteOutcome};
+use crate::command::{AmpSwitch, DeviceInfo, Event, Stage, SwitchOutcome, WriteOutcome};
 use crate::error::EngineError;
 use crate::timings::Timings;
 
@@ -150,17 +151,118 @@ impl Session {
     }
 
     pub(crate) fn read_temp(&mut self) -> Result<PatchImage, EngineError> {
-        let profile = self.profile()?;
         let started = self.clock.now();
-        let packets = self.request(profile.read_temp_request())?;
+        let attempts = self.timings.read_attempts.max(1);
+        let mut attempt = 1;
+        let result = loop {
+            match self.read_temp_once() {
+                Err(error) if attempt < attempts && read_can_retry(&error) => {
+                    tracing::warn!(%error, attempt, "temp read incomplete, reading again");
+                    attempt += 1;
+                }
+                other => break other,
+            }
+        };
         self.hold_off_program_change();
-        let image = PatchImage::from_packets(&profile.patch_layout, profile.temp_patch, &packets)?;
+        let image = result?;
         tracing::debug!(
-            packets = packets.len(),
+            attempt,
             millis = self.clock.now().duration_since(started).as_millis(),
             "temp read"
         );
         Ok(image)
+    }
+
+    fn read_temp_once(&mut self) -> Result<PatchImage, EngineError> {
+        let profile = self.profile()?;
+        let request = profile.read_temp_request();
+        self.drain(self.timings.pre_request_drain)?;
+        self.transport.send(&request.encode())?;
+        let deadline = self.clock.now() + self.timings.read_timeout;
+        let mut assembler = PatchAssembler::new(&profile.patch_layout, profile.temp_patch);
+        let mut received = 0;
+        loop {
+            match self.next_message(deadline)? {
+                None if received == 0 => {
+                    return Err(EngineError::Timeout {
+                        address: request.address(),
+                        received,
+                    });
+                }
+                None => return Ok(assembler.finish()?),
+                Some(Incoming::Dt1(packet)) if assembler.add(&packet) => {
+                    received += 1;
+                    if assembler.is_complete() {
+                        return Ok(assembler.finish()?);
+                    }
+                }
+                Some(Incoming::Dt1(packet)) => self.unsolicited.push(packet),
+                Some(_) => {}
+            }
+        }
+    }
+
+    pub(crate) fn follow_amp_switch(
+        &mut self,
+        packets: &[Dt1],
+    ) -> Result<Option<AmpSwitch>, EngineError> {
+        let profile = self.profile()?;
+        let Some(position) = packets
+            .iter()
+            .rposition(|packet| packet.address() == profile.current_channel)
+        else {
+            return Ok(None);
+        };
+        let mut channel = packets
+            .get(position)
+            .map(|packet| parse_current_channel(packet.data()))
+            .transpose()?;
+        tracing::info!(
+            ?channel,
+            "amp switched channel by itself, collecting its dump"
+        );
+        self.hold_off_program_change();
+        let mut assembler = PatchAssembler::new(&profile.patch_layout, profile.temp_patch);
+        for packet in packets.iter().skip(position + 1) {
+            assembler.add(packet);
+        }
+        let limit = self.clock.now() + self.timings.dump_limit;
+        while !assembler.is_complete() {
+            let quiet = (self.clock.now() + self.timings.dump_quiet).min(limit);
+            match self.next_message(quiet)? {
+                None => break,
+                Some(Incoming::Dt1(packet)) => {
+                    if packet.address() == profile.current_channel {
+                        channel = Some(parse_current_channel(packet.data())?);
+                        assembler = PatchAssembler::new(&profile.patch_layout, profile.temp_patch);
+                    } else {
+                        assembler.add(&packet);
+                    }
+                    self.unsolicited.push(packet);
+                }
+                Some(_) => {}
+            }
+        }
+        let Some(channel) = channel else {
+            return Ok(None);
+        };
+        let missing = assembler.missing();
+        if let Ok(temp) = assembler.finish() {
+            tracing::info!(%channel, "temp taken from the amp's own dump");
+            return Ok(Some(AmpSwitch {
+                channel,
+                temp,
+                from_dump: true,
+            }));
+        }
+        tracing::info!(%channel, missing, "amp dump incomplete, reading temp after hold-off");
+        self.wait_for_program_change(&mut |_| {})?;
+        let temp = self.read_temp()?;
+        Ok(Some(AmpSwitch {
+            channel,
+            temp,
+            from_dump: false,
+        }))
     }
 
     pub(crate) fn read_current_channel(&mut self) -> Result<Channel, EngineError> {
@@ -319,4 +421,11 @@ impl Session {
             actual,
         })
     }
+}
+
+fn read_can_retry(error: &EngineError) -> bool {
+    matches!(
+        error,
+        EngineError::Timeout { .. } | EngineError::Protocol(ProtocolError::IncompleteImage { .. })
+    )
 }

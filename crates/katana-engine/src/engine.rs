@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use katana_midi::{MidiBackend, katana_candidates};
 use katana_params::ParamTable;
-use katana_protocol::{LinkedType, PatchImage, PatchOffset};
+use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset};
 use katana_store::{
     Preset, PresetStorage, decode_preset, decode_syx, encode_preset, encode_syx, preset_key,
     read_preset_summary, validate_key,
@@ -47,12 +47,21 @@ impl Engine {
     }
 
     pub fn handle(&mut self, command: Command, sink: &mut dyn FnMut(Event)) {
+        let follow = !matches!(command, Command::Detect | Command::SwitchChannel(_));
         let result = self.run(command, sink);
-        if let Some(session) = self.session.as_mut() {
-            for packet in session.take_unsolicited() {
+        let packets = self
+            .session
+            .as_mut()
+            .map(Session::take_unsolicited)
+            .unwrap_or_default();
+        let deferred = if follow {
+            packets
+        } else {
+            for packet in packets {
                 sink(Event::Unsolicited(packet));
             }
-        }
+            Vec::new()
+        };
         match result {
             Ok(event) => sink(event),
             Err(error) => {
@@ -60,6 +69,7 @@ impl Engine {
                 sink(Event::Failed(error));
             }
         }
+        self.forward_unsolicited(deferred, sink);
     }
 
     pub fn poll(&mut self, window: Duration, sink: &mut dyn FnMut(Event)) {
@@ -69,8 +79,22 @@ impl Engine {
         if let Err(error) = session.drain(window) {
             tracing::debug!(%error, "idle poll failed");
         }
-        for packet in session.take_unsolicited() {
+        let packets = session.take_unsolicited();
+        self.forward_unsolicited(packets, sink);
+    }
+
+    fn forward_unsolicited(&mut self, packets: Vec<Dt1>, sink: &mut dyn FnMut(Event)) {
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        let switched = session.follow_amp_switch(&packets);
+        for packet in packets.into_iter().chain(session.take_unsolicited()) {
             sink(Event::Unsolicited(packet));
+        }
+        match switched {
+            Ok(Some(switch)) => sink(Event::AmpSwitched(switch)),
+            Ok(None) => {}
+            Err(error) => tracing::warn!(%error, "could not follow the amp's channel change"),
         }
     }
 

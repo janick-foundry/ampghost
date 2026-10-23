@@ -8,8 +8,8 @@ use adw::prelude::*;
 use anyhow::{Context, Result};
 use gtk::{gio, glib};
 use katana_engine::{
-    Command, DetectReport, DeviceInfo, EngineError, EngineHandle, Event, ParamWrite, PresetEntry,
-    Stage,
+    AmpSwitch, Command, DetectReport, DeviceInfo, EngineError, EngineHandle, Event, ParamWrite,
+    PresetEntry, Stage,
 };
 use katana_params::ParamTable;
 use katana_protocol::{Channel, Dt1, PatchImage, PatchOffset, parse_current_channel};
@@ -497,6 +497,7 @@ impl Ui {
         match event {
             Event::Progress(stage) => self.show_stage(stage),
             Event::Unsolicited(packet) => self.apply_unsolicited(&packet),
+            Event::AmpSwitched(switch) => self.follow_amp_switch(switch),
             Event::Detected(report) => self.on_detected(report),
             Event::TempRead(image) => self.set_image(image),
             Event::WriteVerified(outcome) => {
@@ -664,6 +665,20 @@ impl Ui {
         self.model.borrow_mut().image = Some(image);
     }
 
+    fn follow_amp_switch(self: &Rc<Self>, switch: AmpSwitch) {
+        tracing::info!(
+            channel = %switch.channel,
+            from_dump = switch.from_dump,
+            "following channel change made on the amp"
+        );
+        {
+            let mut model = self.model.borrow_mut();
+            model.channel = Some(switch.channel);
+            model.image = Some(switch.temp);
+        }
+        self.refresh_all();
+    }
+
     fn apply_unsolicited(self: &Rc<Self>, packet: &Dt1) {
         let profile = self
             .model
@@ -678,9 +693,6 @@ impl Ui {
             if let Ok(channel) = parse_current_channel(packet.data()) {
                 tracing::info!(%channel, "amp reports channel change");
                 self.model.borrow_mut().channel = Some(channel);
-                if !self.is_busy() {
-                    self.send(Command::ReadTemp, Job::ReadTemp);
-                }
             }
             self.refresh_header();
             return;

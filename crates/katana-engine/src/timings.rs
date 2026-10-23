@@ -10,6 +10,9 @@ pub struct Timings {
     pub channel_settle: Duration,
     pub channel_attempts: u8,
     pub program_change_holdoff: Duration,
+    pub dump_quiet: Duration,
+    pub dump_limit: Duration,
+    pub read_attempts: u8,
 }
 
 impl Default for Timings {
@@ -23,6 +26,9 @@ impl Default for Timings {
             channel_settle: Duration::from_millis(700),
             channel_attempts: 3,
             program_change_holdoff: Duration::from_millis(3000),
+            dump_quiet: Duration::from_millis(500),
+            dump_limit: Duration::from_millis(3000),
+            read_attempts: 2,
         }
     }
 }

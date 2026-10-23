@@ -88,6 +88,13 @@ pub enum Stage {
     ReadingTemp,
 }
 
+#[derive(Debug, Clone)]
+pub struct AmpSwitch {
+    pub channel: Channel,
+    pub temp: PatchImage,
+    pub from_dump: bool,
+}
+
 #[derive(Debug)]
 pub enum Event {
     Detected(DetectReport),
@@ -115,12 +122,16 @@ pub enum Event {
     Presets(Vec<PresetEntry>),
     Backups(Vec<String>),
     Unsolicited(Dt1),
+    AmpSwitched(AmpSwitch),
     Failed(EngineError),
     ShutDown,
 }
 
 impl Event {
     pub fn is_terminal(&self) -> bool {
-        !matches!(self, Self::Progress(_) | Self::Unsolicited(_))
+        !matches!(
+            self,
+            Self::Progress(_) | Self::Unsolicited(_) | Self::AmpSwitched(_)
+        )
     }
 }

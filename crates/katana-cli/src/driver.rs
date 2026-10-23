@@ -100,6 +100,12 @@ impl Driver {
             match event {
                 Event::Progress(stage) => tracing::info!(?stage, "progress"),
                 Event::Unsolicited(packet) => tracing::info!(%packet, "unsolicited from amp"),
+                Event::AmpSwitched(switch) => tracing::info!(
+                    channel = %switch.channel,
+                    patch = %switch.temp.name(),
+                    from_dump = switch.from_dump,
+                    "amp switched channel"
+                ),
                 Event::Failed(error) => return Err(error.into()),
                 other => return Ok(other),
             }
