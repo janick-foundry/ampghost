@@ -7,8 +7,19 @@
   min-width: 104px;
 }
 
-.chain-body {
-  padding: 10px 12px;
+.chain-head {
+  padding: 8px 10px 4px 12px;
+  min-height: 26px;
+}
+
+.chain-select {
+  border-radius: 0;
+  margin: 0;
+  padding: 6px 12px 10px;
+}
+
+.chain-block.selected .chain-select {
+  background-color: alpha(var(--accent-bg-color), 0.08);
 }
 
 .chain-block.selected {

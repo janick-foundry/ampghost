@@ -230,6 +230,7 @@ pub struct Ui {
     drop_gap: Cell<Option<usize>>,
     chain_toast: RefCell<Option<adw::Toast>>,
     card_sizes: gtk::SizeGroup,
+    head_sizes: gtk::SizeGroup,
     params: RefCell<Option<ParamsView>>,
     search_text: Rc<RefCell<String>>,
 }
@@ -525,6 +526,7 @@ impl Ui {
             drop_gap: Cell::new(None),
             chain_toast: RefCell::new(None),
             card_sizes: gtk::SizeGroup::new(gtk::SizeGroupMode::Both),
+            head_sizes: gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical),
             params: RefCell::new(None),
             search_text: Rc::new(RefCell::new(String::new())),
         });
@@ -1714,8 +1716,11 @@ impl Ui {
     }
 
     fn rebuild_chain(self: &Rc<Self>, order: &[&'static BlockSpec]) {
-        for card in self.cards.borrow().iter() {
-            self.card_sizes.remove_widget(&card.root);
+        for widget in self.card_sizes.widgets() {
+            self.card_sizes.remove_widget(&widget);
+        }
+        for widget in self.head_sizes.widgets() {
+            self.head_sizes.remove_widget(&widget);
         }
         for container in [&self.chain_box, &self.extras_box] {
             while let Some(child) = container.first_child() {
@@ -1752,13 +1757,13 @@ impl Ui {
             .overflow(gtk::Overflow::Hidden)
             .vexpand(false)
             .build();
-        let body = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
+        let head = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
             .spacing(6)
-            .vexpand(true)
-            .css_classes(["chain-body"])
+            .css_classes(["chain-head"])
             .build();
-        root.append(&body);
+        root.append(&head);
+        self.head_sizes.add_widget(&head);
         let dot = gtk::Box::builder()
             .css_classes(["variant-dot", "variant-none"])
             .valign(gtk::Align::Center)
@@ -1785,20 +1790,22 @@ impl Ui {
         let content = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(2)
+            .valign(gtk::Align::Start)
             .build();
         content.append(&top);
         content.append(&type_label);
         let button = gtk::Button::builder()
             .child(&content)
-            .css_classes(["flat"])
+            .css_classes(["flat", "chain-select"])
+            .vexpand(true)
             .tooltip_text(trf("Edit {block}", &[("block", &tr(spec.title))]))
             .build();
         let select_ui = Rc::clone(self);
         button.connect_clicked(move |_| select_ui.select_block(spec.key));
-        body.append(&button);
+        root.append(&button);
         let switch = spec.on_param.map(|id| {
             let switch = gtk::Switch::builder()
-                .halign(gtk::Align::Center)
+                .halign(gtk::Align::Start)
                 .valign(gtk::Align::Center)
                 .build();
             switch.update_property(&[gtk::accessible::Property::Label(&trf(
@@ -1811,12 +1818,15 @@ impl Ui {
                     write_ui.edit_param(id, Edit::Discrete(u16::from(switch.is_active())));
                 }
             });
-            body.append(&switch);
+            head.append(&switch);
             switch
         });
         let (menu, actions) = if blocks::is_movable(spec) {
             let (menu, actions) = self.card_menu(spec, &root);
-            let bar = Self::grab_bar(spec, &menu);
+            menu.set_halign(gtk::Align::End);
+            menu.set_hexpand(true);
+            head.append(&menu);
+            let bar = Self::grab_bar(spec);
             self.connect_card_drag(spec, &root, &bar);
             root.append(&bar);
             (Some(menu), Some(actions))
@@ -1835,7 +1845,7 @@ impl Ui {
         }
     }
 
-    fn grab_bar(spec: &'static BlockSpec, menu: &gtk::MenuButton) -> gtk::Box {
+    fn grab_bar(spec: &'static BlockSpec) -> gtk::Box {
         let title = tr(spec.title);
         let bar = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -1854,7 +1864,6 @@ impl Ui {
             .valign(gtk::Align::Center)
             .build();
         center.set_center_widget(Some(&grip));
-        center.set_end_widget(Some(menu));
         bar.append(&center);
         bar
     }
