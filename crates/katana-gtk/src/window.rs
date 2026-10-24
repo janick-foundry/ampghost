@@ -229,6 +229,7 @@ pub struct Ui {
     dragging: Cell<Option<&'static str>>,
     drop_gap: Cell<Option<usize>>,
     chain_toast: RefCell<Option<adw::Toast>>,
+    card_sizes: gtk::SizeGroup,
     params: RefCell<Option<ParamsView>>,
     search_text: Rc<RefCell<String>>,
 }
@@ -397,6 +398,7 @@ fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
         .orientation(gtk::Orientation::Horizontal)
         .spacing(6)
         .margin_bottom(14)
+        .valign(gtk::Align::Start)
         .css_classes(["chain-row"])
         .build();
     let chain_section = gtk::Box::builder()
@@ -522,6 +524,7 @@ impl Ui {
             dragging: Cell::new(None),
             drop_gap: Cell::new(None),
             chain_toast: RefCell::new(None),
+            card_sizes: gtk::SizeGroup::new(gtk::SizeGroupMode::Both),
             params: RefCell::new(None),
             search_text: Rc::new(RefCell::new(String::new())),
         });
@@ -1711,6 +1714,9 @@ impl Ui {
     }
 
     fn rebuild_chain(self: &Rc<Self>, order: &[&'static BlockSpec]) {
+        for card in self.cards.borrow().iter() {
+            self.card_sizes.remove_widget(&card.root);
+        }
         for container in [&self.chain_box, &self.extras_box] {
             while let Some(child) = container.first_child() {
                 container.remove(&child);
@@ -1720,6 +1726,7 @@ impl Ui {
         let mut gaps = Vec::new();
         for spec in order {
             let card = self.make_card(spec);
+            self.card_sizes.add_widget(&card.root);
             if spec.chain_label.is_none() {
                 self.extras_box.append(&card.root);
             } else {
