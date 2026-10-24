@@ -383,6 +383,25 @@ fn to_raw(value: f64) -> u16 {
     value.round().clamp(0.0, f64::from(u16::MAX)) as u16
 }
 
+fn ignore_wheel(widget: &gtk::Widget) {
+    if widget.is::<gtk::ScrolledWindow>() {
+        return;
+    }
+    let controllers = widget.observe_controllers();
+    let wheels: Vec<gtk::EventControllerScroll> = (0..controllers.n_items())
+        .filter_map(|index| controllers.item(index))
+        .filter_map(|item| item.downcast::<gtk::EventControllerScroll>().ok())
+        .collect();
+    for wheel in wheels {
+        widget.remove_controller(&wheel);
+    }
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        ignore_wheel(&current);
+        child = current.next_sibling();
+    }
+}
+
 fn slider_row(title: &str, scale: &gtk::Scale, value_label: &gtk::Label) -> gtk::ListBoxRow {
     let title_label = gtk::Label::builder()
         .label(title)
@@ -435,6 +454,7 @@ fn scale_row(
         .css_classes(["detail-scale"])
         .build();
     scale.update_property(&[gtk::accessible::Property::Label(title)]);
+    ignore_wheel(scale.upcast_ref());
     let value_label = gtk::Label::builder()
         .xalign(1.0)
         .css_classes(["numeric", "dim-label"])
@@ -512,6 +532,7 @@ fn spin_row(
     on_change: &OnChange,
 ) -> (gtk::Widget, Updater) {
     let row = adw::SpinRow::with_range(f64::from(raw_min), f64::from(raw_max), 1.0);
+    ignore_wheel(row.upcast_ref());
     row.set_title(title);
     row.set_title_lines(1);
     row.set_subtitle_lines(1);
