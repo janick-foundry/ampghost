@@ -384,11 +384,13 @@ fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
         .orientation(gtk::Orientation::Horizontal)
         .spacing(6)
         .margin_bottom(14)
+        .valign(gtk::Align::Start)
         .css_classes(["chain-row"])
         .build();
     let chain_scroller = gtk::ScrolledWindow::builder()
         .vscrollbar_policy(gtk::PolicyType::Never)
         .hexpand(true)
+        .vexpand(false)
         .child(&chain_box)
         .build();
     let extras_box = gtk::Box::builder()
@@ -1741,6 +1743,7 @@ impl Ui {
             .orientation(gtk::Orientation::Vertical)
             .css_classes(["card", "chain-block"])
             .overflow(gtk::Overflow::Hidden)
+            .vexpand(false)
             .build();
         let body = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
