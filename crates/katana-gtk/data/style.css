@@ -18,8 +18,42 @@
   padding: 6px 12px 10px;
 }
 
+.chain-block.selected {
+  background-color: color-mix(in srgb, var(--accent-bg-color) 14%, var(--card-bg-color));
+}
+
 .chain-block.selected .chain-select {
-  background-color: alpha(var(--accent-bg-color), 0.08);
+  background-color: color-mix(in srgb, var(--accent-bg-color) 10%, transparent);
+}
+
+.chain-block.selected .chain-select:hover {
+  background-color: color-mix(in srgb, var(--accent-bg-color) 16%, transparent);
+}
+
+.detail-split > .sidebar-pane {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+.detail-split > dimming,
+.detail-split > shadow,
+.detail-split > border,
+.detail-split > outline {
+  background: none;
+  box-shadow: none;
+}
+
+.detail-sheet {
+  margin: 12px 12px 12px 6px;
+}
+
+.detail-split.collapsed .detail-sheet {
+  box-shadow: 0 4px 24px rgb(0 0 0 / 22%), 0 0 0 1px rgb(0 0 0 / 6%);
+}
+
+.detail-head {
+  padding: 18px 12px 6px 24px;
 }
 
 .chain-block.selected {
@@ -30,10 +64,6 @@
 .chain-block.block-off .block-title,
 .chain-block.block-off .block-type {
   opacity: 0.55;
-}
-
-.chain-arrow {
-  opacity: 0.4;
 }
 
 .variant-dot {
@@ -103,7 +133,7 @@
 
 .drop-indicator {
   min-width: 4px;
-  margin: 6px 8px;
+  margin: 6px 0;
   border-radius: 2px;
   background-color: var(--accent-bg-color);
 }

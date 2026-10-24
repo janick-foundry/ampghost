@@ -85,9 +85,7 @@ pub fn build(
         .child(&clamp)
         .build();
     let mut updaters = Vec::new();
-    let main = adw::PreferencesGroup::builder()
-        .title(tr(spec.title))
-        .build();
+    let main = adw::PreferencesGroup::new();
     if !structure.writable {
         main.set_description(Some(&tr("Writing is disabled.")));
     }

@@ -80,6 +80,7 @@ struct Model {
     baseline: Option<PatchImage>,
     presets: Vec<PresetEntry>,
     selected: &'static str,
+    detail_open: bool,
     pending_switch: Option<Channel>,
     failed_detect: bool,
 }
@@ -145,43 +146,22 @@ impl Move {
 struct Gap {
     root: gtk::Box,
     indicator: gtk::Box,
-    arrow: Option<gtk::Image>,
 }
 
 impl Gap {
-    fn new(with_arrow: bool) -> Self {
-        let indicator = gtk::Box::builder()
-            .css_classes(["drop-indicator"])
-            .visible(false)
-            .build();
+    fn new() -> Self {
+        let indicator = gtk::Box::builder().css_classes(["drop-indicator"]).build();
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .visible(with_arrow)
+            .visible(false)
             .build();
         root.append(&indicator);
-        let arrow = with_arrow.then(|| {
-            let arrow = gtk::Image::builder()
-                .icon_name("go-next-symbolic")
-                .css_classes(["chain-arrow"])
-                .margin_start(2)
-                .margin_end(2)
-                .build();
-            root.append(&arrow);
-            arrow
-        });
-        Self {
-            root,
-            indicator,
-            arrow,
-        }
+        Self { root, indicator }
     }
 
     fn set_active(&self, active: bool) {
         self.indicator.set_visible(active);
-        match &self.arrow {
-            Some(arrow) => arrow.set_visible(!active),
-            None => self.root.set_visible(active),
-        }
+        self.root.set_visible(active);
     }
 }
 
@@ -210,6 +190,9 @@ pub struct Ui {
     chain_box: gtk::Box,
     extras_box: gtk::Box,
     params_holder: adw::Bin,
+    detail_split: adw::OverlaySplitView,
+    detail_title: gtk::Label,
+    detail_subtitle: gtk::Label,
     preset_list: gtk::ListBox,
     preset_search: gtk::SearchEntry,
     sidebar: gtk::Box,
@@ -292,6 +275,7 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         Box::new(|ui| ui.send(Command::ListBackups, Job::ListBackups)),
     );
     simple("save-preset", Box::new(|ui| ui.prompt_save_preset(None)));
+    simple("close-detail", Box::new(Ui::close_detail));
     simple(
         "search",
         Box::new(|ui| {
@@ -384,51 +368,173 @@ fn main_menu() -> gio::Menu {
 fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
     let chain_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
-        .spacing(6)
-        .margin_bottom(14)
+        .spacing(12)
         .valign(gtk::Align::Start)
         .css_classes(["chain-row"])
         .build();
+    let chain_wrap = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .halign(gtk::Align::Start)
+        .build();
+    chain_wrap.append(&flow_arrow());
+    chain_wrap.append(&chain_box);
     let chain_scroller = gtk::ScrolledWindow::builder()
         .vscrollbar_policy(gtk::PolicyType::Never)
         .hexpand(true)
         .vexpand(false)
-        .child(&chain_box)
+        .child(&chain_wrap)
         .build();
     let extras_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
-        .spacing(6)
-        .margin_bottom(14)
+        .spacing(12)
         .valign(gtk::Align::Start)
         .css_classes(["chain-row"])
         .build();
-    let chain_section = gtk::Box::builder()
+    let extras_wrap = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .halign(gtk::Align::Start)
+        .build();
+    extras_wrap.append(&flow_arrow());
+    extras_wrap.append(&extras_box);
+    let extras_scroller = gtk::ScrolledWindow::builder()
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .hexpand(true)
+        .vexpand(false)
+        .child(&extras_wrap)
+        .build();
+    let column = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .hexpand(true)
         .build();
-    chain_section.append(&section_heading(&tr("Signal Chain")));
-    chain_section.append(&chain_scroller);
-    let extras_section = gtk::Box::builder()
+    column.append(&section_heading(&tr("Signal Chain")));
+    column.append(&chain_scroller);
+    column.append(&section_heading(&tr("Output")));
+    column.append(&extras_scroller);
+    (column, chain_box, extras_box)
+}
+
+fn flow_arrow() -> gtk::DrawingArea {
+    let area = gtk::DrawingArea::builder()
+        .content_height(12)
+        .margin_start(12)
+        .margin_end(12)
+        .margin_top(8)
+        .css_classes(["flow-arrow"])
+        .build();
+    area.set_draw_func(|area, cr, width, height| {
+        let color = area.color();
+        let (width, height) = (f64::from(width), f64::from(height));
+        let middle = (height / 2.0).floor() + 0.5;
+        cr.set_source_rgba(
+            f64::from(color.red()),
+            f64::from(color.green()),
+            f64::from(color.blue()),
+            f64::from(color.alpha()) * 0.35,
+        );
+        cr.set_line_width(1.0);
+        cr.set_line_cap(gtk::cairo::LineCap::Round);
+        cr.set_line_join(gtk::cairo::LineJoin::Round);
+        cr.move_to(0.5, middle);
+        cr.line_to(width - 1.0, middle);
+        cr.move_to(width - 7.0, middle - 4.5);
+        cr.line_to(width - 1.0, middle);
+        cr.line_to(width - 7.0, middle + 4.5);
+        if let Err(error) = cr.stroke() {
+            tracing::debug!(%error, "drawing the signal flow arrow");
+        }
+    });
+    area
+}
+
+fn collapse_breakpoint(split: &adw::OverlaySplitView) -> adw::Breakpoint {
+    let narrow = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
+        adw::BreakpointConditionLengthType::MaxWidth,
+        DETAIL_COLLAPSE_WIDTH,
+        adw::LengthUnit::Sp,
+    ));
+    narrow.add_setter(split, "collapsed", Some(&true.to_value()));
+    narrow
+}
+
+fn build_detail_split(
+    channel_section: &adw::Clamp,
+    blocks_row: &gtk::Box,
+    detail: &gtk::Box,
+) -> adw::OverlaySplitView {
+    let main = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .build();
-    extras_section.append(&section_heading(&tr("Output")));
-    extras_section.append(&extras_box);
-    let blocks_row = gtk::Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
+    main.append(channel_section);
+    main.append(blocks_row);
+    let main_scroller = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vexpand(true)
+        .child(&main)
         .build();
-    blocks_row.append(&chain_section);
-    blocks_row.append(
-        &gtk::Separator::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .margin_top(12)
-            .margin_bottom(12)
-            .build(),
-    );
-    blocks_row.append(&extras_section);
-    (blocks_row, chain_box, extras_box)
+    adw::OverlaySplitView::builder()
+        .sidebar(detail)
+        .content(&main_scroller)
+        .sidebar_position(gtk::PackType::End)
+        .pin_sidebar(true)
+        .min_sidebar_width(DETAIL_MIN_WIDTH)
+        .max_sidebar_width(DETAIL_MAX_WIDTH)
+        .sidebar_width_fraction(0.3)
+        .show_sidebar(false)
+        .css_classes(["detail-split"])
+        .build()
+}
+
+fn build_detail() -> (gtk::Box, adw::Bin, gtk::Label, gtk::Label) {
+    let title = gtk::Label::builder()
+        .xalign(0.0)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .css_classes(["title-2"])
+        .build();
+    let subtitle = gtk::Label::builder()
+        .xalign(0.0)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .css_classes(["dim-label"])
+        .build();
+    let titles = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(2)
+        .hexpand(true)
+        .valign(gtk::Align::Center)
+        .build();
+    titles.append(&title);
+    titles.append(&subtitle);
+    let close = gtk::Button::builder()
+        .icon_name("window-close-symbolic")
+        .css_classes(["flat", "circular"])
+        .valign(gtk::Align::Start)
+        .action_name("win.close-detail")
+        .tooltip_text(tr("Close"))
+        .build();
+    close.update_property(&[gtk::accessible::Property::Label(&tr("Close block details"))]);
+    let head = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .css_classes(["detail-head"])
+        .build();
+    head.append(&titles);
+    head.append(&close);
+    let holder = adw::Bin::builder().vexpand(true).build();
+    let panel = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .css_classes(["card", "detail-sheet"])
+        .overflow(gtk::Overflow::Hidden)
+        .build();
+    panel.append(&head);
+    panel.append(&holder);
+    (panel, holder, title, subtitle)
 }
 
 const DRAG_ICON_MARGIN: u8 = 24;
+const DETAIL_MIN_WIDTH: f64 = 420.0;
+const DETAIL_MAX_WIDTH: f64 = 460.0;
+const DETAIL_COLLAPSE_WIDTH: f64 = 1500.0;
+const WINDOW_MIN_WIDTH: i32 = 960;
+const WINDOW_MIN_HEIGHT: i32 = 600;
 
 fn drag_icon(card: &gtk::Box) -> Option<gtk::gdk::Paintable> {
     let bounds = card.compute_bounds(card)?;
@@ -472,14 +578,9 @@ impl Ui {
         let (channel_section, channel_buttons) = build_channels();
         let (sidebar, preset_search, preset_list) = build_sidebar();
         let (blocks_row, chain_box, extras_box) = build_blocks_row();
-        let params_holder = adw::Bin::builder().vexpand(true).build();
-        let editor = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .build();
-        editor.append(&channel_section);
-        editor.append(&blocks_row);
-        editor.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-        editor.append(&params_holder);
+        let (detail, params_holder, detail_title, detail_subtitle) = build_detail();
+        let detail_split = build_detail_split(&channel_section, &blocks_row, &detail);
+        let editor = detail_split.clone();
 
         let retry_button = gtk::Button::builder()
             .label(tr("Try Again"))
@@ -514,8 +615,11 @@ impl Ui {
             .title(tr("Katana Control"))
             .default_width(1920)
             .default_height(1080)
+            .width_request(WINDOW_MIN_WIDTH)
+            .height_request(WINDOW_MIN_HEIGHT)
             .content(&toasts)
             .build();
+        window.add_breakpoint(collapse_breakpoint(&detail_split));
 
         let ui = Rc::new(Self {
             table,
@@ -531,6 +635,9 @@ impl Ui {
             chain_box,
             extras_box,
             params_holder,
+            detail_split,
+            detail_title,
+            detail_subtitle,
             preset_list,
             preset_search,
             sidebar,
@@ -560,6 +667,7 @@ impl Ui {
         });
         ui.connect_sidebar();
         ui.connect_chain_drop();
+        ui.connect_detail();
         let close_ui = Rc::clone(&ui);
         ui.window
             .connect_close_request(move |_| close_ui.on_close_request());
@@ -590,6 +698,43 @@ impl Ui {
             *search_ui.search_text.borrow_mut() = entry.text().to_string();
             search_ui.preset_list.invalidate_filter();
         });
+    }
+
+    fn connect_detail(self: &Rc<Self>) {
+        let shown_ui = Rc::downgrade(self);
+        self.detail_split.connect_show_sidebar_notify(move |split| {
+            let Some(ui) = shown_ui.upgrade() else {
+                return;
+            };
+            let shown = split.shows_sidebar();
+            let changed = {
+                let mut model = ui.model.borrow_mut();
+                let changed = model.detail_open != shown;
+                model.detail_open = shown;
+                changed
+            };
+            if changed {
+                ui.refresh_chain();
+            }
+        });
+        let keys = gtk::EventControllerKey::new();
+        let key_ui = Rc::downgrade(self);
+        keys.connect_key_pressed(move |_, key, _, _| {
+            let Some(ui) = key_ui.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
+            if key == gtk::gdk::Key::Escape && ui.model.borrow().detail_open {
+                ui.close_detail();
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        self.window.add_controller(keys);
+    }
+
+    fn close_detail(self: &Rc<Self>) {
+        self.model.borrow_mut().detail_open = false;
+        self.refresh_all();
     }
 
     fn connect_chain_drop(self: &Rc<Self>) {
@@ -1479,11 +1624,23 @@ impl Ui {
     }
 
     fn select_block(self: &Rc<Self>, key: &'static str) {
-        self.model.borrow_mut().selected = key;
+        {
+            let mut model = self.model.borrow_mut();
+            model.detail_open = !(model.detail_open && model.selected == key);
+            model.selected = key;
+        }
         self.refresh_all();
     }
 
+    fn refresh_detail(&self) {
+        let open = self.model.borrow().detail_open;
+        if self.detail_split.shows_sidebar() != open {
+            self.detail_split.set_show_sidebar(open);
+        }
+    }
+
     fn refresh_all(self: &Rc<Self>) {
+        self.refresh_detail();
         self.refresh_stack();
         self.refresh_header();
         self.refresh_chain();
@@ -1710,7 +1867,7 @@ impl Ui {
                 card.button
                     .update_property(&[gtk::accessible::Property::Description(&text)]);
             }
-            if card.key == model.selected {
+            if model.detail_open && card.key == model.selected {
                 card.root.add_css_class("selected");
             } else {
                 card.root.remove_css_class("selected");
@@ -1768,14 +1925,14 @@ impl Ui {
             if spec.chain_label.is_none() {
                 self.extras_box.append(&card.root);
             } else {
-                let gap = Gap::new(!gaps.is_empty());
+                let gap = Gap::new();
                 self.chain_box.append(&gap.root);
                 gaps.push(gap);
                 self.chain_box.append(&card.root);
             }
             cards.push(card);
         }
-        let end = Gap::new(false);
+        let end = Gap::new();
         self.chain_box.append(&end.root);
         gaps.push(end);
         *self.cards.borrow_mut() = cards;
@@ -1976,6 +2133,10 @@ impl Ui {
         let Some(spec) = blocks::spec(model.selected) else {
             return;
         };
+        self.detail_title.set_text(&tr(spec.title));
+        let type_text = blocks::type_label(self.table, image, spec).unwrap_or_default();
+        self.detail_subtitle.set_text(&type_text);
+        self.detail_subtitle.set_visible(!type_text.is_empty());
         let structure = Structure {
             block: spec.key,
             type_value: blocks::type_value(self.table, image, spec),
