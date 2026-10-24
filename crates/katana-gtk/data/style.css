@@ -60,3 +60,18 @@
   min-height: 36px;
   font-weight: bold;
 }
+
+.chain-block.chain-anchor {
+  background-color: color-mix(in srgb, var(--accent-bg-color) 8%, var(--card-bg-color));
+}
+
+.chain-anchor-icon {
+  opacity: 0.45;
+  margin: 4px;
+}
+
+.chain-more {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+}

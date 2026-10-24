@@ -8,8 +8,8 @@ use adw::prelude::*;
 use anyhow::{Context, Result};
 use gtk::{gio, glib};
 use katana_engine::{
-    AmpSwitch, Command, DetectReport, DeviceInfo, EngineError, EngineHandle, Event, ParamWrite,
-    PresetEntry, Stage,
+    AmpSwitch, ChainOutcome, Command, DetectReport, DeviceInfo, EngineError, EngineHandle, Event,
+    ParamWrite, PresetEntry, Stage,
 };
 use katana_params::ParamTable;
 use katana_protocol::{Channel, Dt1, PatchImage, PatchOffset, parse_current_channel};
@@ -37,6 +37,7 @@ enum Job {
     Detect,
     ReadTemp,
     WriteParams,
+    WriteChain { undo: bool },
     Switch(Channel),
     Backup { then: Option<FollowUp> },
     Restore,
@@ -56,6 +57,8 @@ impl Job {
             Self::Detect => tr("Looking for Katana…"),
             Self::ReadTemp => tr("Reading from Katana…"),
             Self::WriteParams => tr("Writing…"),
+            Self::WriteChain { undo: false } => tr("Moving block…"),
+            Self::WriteChain { undo: true } => tr("Undoing chain change…"),
             Self::Switch(channel) => {
                 trf("Switching to {channel}…", &[("channel", channel.label())])
             }
@@ -81,9 +84,70 @@ struct Model {
     failed_detect: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Move {
+    Left,
+    Right,
+    Start,
+    End,
+}
+
+impl Move {
+    const ALL: [Self; 4] = [Self::Left, Self::Right, Self::Start, Self::End];
+
+    fn action(self) -> &'static str {
+        match self {
+            Self::Left => "move-left",
+            Self::Right => "move-right",
+            Self::Start => "move-start",
+            Self::End => "move-end",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Left => "Move Left",
+            Self::Right => "Move Right",
+            Self::Start => "Move to Start",
+            Self::End => "Move to End",
+        }
+    }
+
+    fn accel(self) -> &'static str {
+        match self {
+            Self::Left => "<Alt>Left",
+            Self::Right => "<Alt>Right",
+            Self::Start => "<Alt>Home",
+            Self::End => "<Alt>End",
+        }
+    }
+
+    fn from_key(key: gtk::gdk::Key) -> Option<Self> {
+        match key {
+            gtk::gdk::Key::Left | gtk::gdk::Key::KP_Left => Some(Self::Left),
+            gtk::gdk::Key::Right | gtk::gdk::Key::KP_Right => Some(Self::Right),
+            gtk::gdk::Key::Home | gtk::gdk::Key::KP_Home => Some(Self::Start),
+            gtk::gdk::Key::End | gtk::gdk::Key::KP_End => Some(Self::End),
+            _ => None,
+        }
+    }
+
+    fn target(self, from: usize, count: usize) -> Option<usize> {
+        match self {
+            Self::Left => from.checked_sub(1),
+            Self::Right => (from + 1 < count).then_some(from + 1),
+            Self::Start => (from > 0).then_some(0),
+            Self::End => (from + 1 < count).then(|| count - 1),
+        }
+    }
+}
+
 struct Card {
     key: &'static str,
     root: gtk::Box,
+    button: gtk::Button,
+    menu: Option<gtk::MenuButton>,
+    actions: Option<gio::SimpleActionGroup>,
     dot: gtk::Box,
     type_label: gtk::Label,
     switch: Option<gtk::Switch>,
@@ -117,6 +181,8 @@ pub struct Ui {
     closing: Cell<bool>,
     cards: RefCell<Vec<Card>>,
     chain_keys: RefCell<Vec<&'static str>>,
+    refocus: Cell<Option<&'static str>>,
+    chain_toast: RefCell<Option<adw::Toast>>,
     params: RefCell<Option<ParamsView>>,
     search_text: Rc<RefCell<String>>,
 }
@@ -217,6 +283,19 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         }
     });
     ui.window.add_action(&apply);
+    let undo_chain = gio::SimpleAction::new("undo-chain", Some(glib::VariantTy::STRING));
+    let undo_ui = Rc::clone(ui);
+    undo_chain.connect_activate(move |_, parameter| {
+        let order = parameter
+            .and_then(glib::Variant::get::<String>)
+            .and_then(|text| parse_hex(&text));
+        if let Some(order) = order
+            && undo_ui.chain_editable()
+        {
+            undo_ui.write_chain(order, true);
+        }
+    });
+    ui.window.add_action(&undo_chain);
     let quit = gio::SimpleAction::new("quit", None);
     let quit_ui = Rc::clone(ui);
     quit.connect_activate(move |_, _| quit_ui.window.close());
@@ -390,6 +469,8 @@ impl Ui {
             closing: Cell::new(false),
             cards: RefCell::new(Vec::new()),
             chain_keys: RefCell::new(Vec::new()),
+            refocus: Cell::new(None),
+            chain_toast: RefCell::new(None),
             params: RefCell::new(None),
             search_text: Rc::new(RefCell::new(String::new())),
         });
@@ -551,9 +632,9 @@ impl Ui {
                     packets = outcome.packets,
                     "write verified"
                 );
-                self.set_image(outcome.image);
+                self.adopt_image(outcome.image);
             }
-            Event::ChainWritten(outcome) => self.set_image(outcome.image),
+            Event::ChainWritten(outcome) => self.on_chain_written(job.as_ref(), outcome),
             Event::ChannelSwitched(outcome) => {
                 self.model.borrow_mut().channel = Some(outcome.channel);
                 self.set_clean_image(outcome.temp);
@@ -695,6 +776,13 @@ impl Ui {
                 ));
                 self.send(Command::ReadTemp, Job::ReadTemp);
             }
+            (Some(Job::WriteChain { .. }), _) => {
+                self.toast(&trf(
+                    "Could not change the signal chain: {error}",
+                    &[("error", &error.to_string())],
+                ));
+                self.send(Command::ReadTemp, Job::ReadTemp);
+            }
             (Some(Job::SavePreset), _) => {
                 self.model.borrow_mut().pending_switch = None;
                 self.toast(&error.to_string());
@@ -723,6 +811,152 @@ impl Ui {
             model.baseline = Some(image.clone());
         }
         model.image = Some(image);
+    }
+
+    fn profile(&self) -> Option<&'static katana_protocol::DeviceProfile> {
+        self.model
+            .borrow()
+            .device
+            .as_ref()
+            .and_then(|device| device.profile)
+    }
+
+    fn chain_write_queued(&self) -> bool {
+        self.jobs
+            .borrow()
+            .iter()
+            .any(|job| matches!(job, Job::WriteChain { .. }))
+    }
+
+    fn adopt_image(&self, image: PatchImage) {
+        let mut image = image;
+        if self.chain_write_queued() {
+            let wanted = self
+                .model
+                .borrow()
+                .image
+                .as_ref()
+                .and_then(|current| blocks::chain_codes(self.table, current));
+            if let (Some(profile), Some(order)) = (self.profile(), wanted)
+                && let Ok(next) = profile.with_chain(&image, &order)
+            {
+                image = next;
+            }
+        }
+        self.set_image(image);
+    }
+
+    fn on_chain_written(&self, job: Option<&Job>, outcome: ChainOutcome) {
+        let undo = matches!(job, Some(Job::WriteChain { undo: true }));
+        let normalised = outcome.is_normalised();
+        let changed = outcome.packets > 0;
+        let previous = hex(&outcome.previous);
+        tracing::info!(
+            requested = %hex(&outcome.requested),
+            actual = %hex(&outcome.actual),
+            normalised,
+            "effect chain written"
+        );
+        self.adopt_image(outcome.image);
+        if !changed {
+            return;
+        }
+        let title = if normalised {
+            tr("The amp adjusted the signal chain order")
+        } else if undo {
+            tr("Signal chain change undone")
+        } else {
+            tr("Signal chain changed")
+        };
+        self.window
+            .upcast_ref::<gtk::Widget>()
+            .announce(&title, gtk::AccessibleAnnouncementPriority::Medium);
+        let mut builder = adw::Toast::builder().title(&title).use_markup(false);
+        if !undo {
+            builder = builder
+                .button_label(tr("Undo"))
+                .action_name("win.undo-chain")
+                .action_target(&previous.to_variant());
+        }
+        let toast = builder.build();
+        if let Some(old) = self.chain_toast.replace(Some(toast.clone())) {
+            old.dismiss();
+        }
+        self.toasts.add_toast(toast);
+    }
+
+    fn chain_editable(&self) -> bool {
+        self.can_write()
+            && self.jobs.borrow().iter().all(|job| {
+                matches!(
+                    job,
+                    Job::WriteChain { .. } | Job::WriteParams | Job::ListPresets | Job::ListBackups
+                )
+            })
+    }
+
+    fn move_block(self: &Rc<Self>, key: &'static str, step: Move) {
+        let target = {
+            let model = self.model.borrow();
+            let Some(image) = model.image.as_ref() else {
+                return;
+            };
+            let keys: Vec<&str> = blocks::chain_order(self.table, image)
+                .iter()
+                .map(|spec| spec.key)
+                .collect();
+            keys.iter()
+                .position(|candidate| *candidate == key)
+                .and_then(|from| step.target(from, keys.len()))
+        };
+        if let Some(target) = target {
+            self.move_block_to(key, target);
+        }
+    }
+
+    fn move_block_to(self: &Rc<Self>, key: &'static str, target: usize) {
+        if !self.chain_editable() || !blocks::spec(key).is_some_and(blocks::is_movable) {
+            return;
+        }
+        let order = {
+            let model = self.model.borrow();
+            let Some(image) = model.image.as_ref() else {
+                return;
+            };
+            let current = blocks::chain_codes(self.table, image);
+            match blocks::reorder(self.table, image, key, target) {
+                Some(order) if Some(&order) != current.as_ref() => order,
+                _ => return,
+            }
+        };
+        tracing::info!(block = key, target, "moving block in the signal chain");
+        self.refocus.set(Some(key));
+        self.write_chain(order, false);
+    }
+
+    fn write_chain(self: &Rc<Self>, order: Vec<u8>, undo: bool) {
+        let Some(profile) = self.profile() else {
+            return;
+        };
+        if let Err(error) = profile.validate_chain(&order) {
+            tracing::warn!(%error, "refusing chain write");
+            self.toast(&error.to_string());
+            return;
+        }
+        {
+            let mut model = self.model.borrow_mut();
+            if let Some(image) = model.image.as_mut()
+                && let Ok(next) = profile.with_chain(image, &order)
+            {
+                *image = next;
+            }
+        }
+        if let Some(old) = self.chain_toast.take() {
+            old.dismiss();
+        }
+        self.flush_writes_now();
+        self.send(Command::WriteChain(order), Job::WriteChain { undo });
+        self.refresh_all();
     }
 
     fn set_clean_image(&self, image: PatchImage) {
@@ -1147,6 +1381,38 @@ impl Ui {
             action.set_enabled(!busy);
         }
         self.sidebar.set_sensitive(true);
+        self.refresh_card_actions();
+    }
+
+    fn refresh_card_actions(&self) {
+        let editable = self.chain_editable();
+        let keys = self.chain_keys.borrow();
+        let chain: Vec<&str> = keys
+            .iter()
+            .copied()
+            .filter(|key| blocks::spec(key).is_some_and(|spec| spec.chain_label.is_some()))
+            .collect();
+        for card in self.cards.borrow().iter() {
+            let Some(actions) = &card.actions else {
+                continue;
+            };
+            let from = chain.iter().position(|key| *key == card.key);
+            for step in Move::ALL {
+                let enabled = editable
+                    && from
+                        .and_then(|from| step.target(from, chain.len()))
+                        .is_some();
+                if let Some(action) = actions
+                    .lookup_action(step.action())
+                    .and_then(|action| action.downcast::<gio::SimpleAction>().ok())
+                {
+                    action.set_enabled(enabled);
+                }
+            }
+            if let Some(menu) = &card.menu {
+                menu.set_sensitive(editable);
+            }
+        }
     }
 
     fn rebuild_presets(&self) {
@@ -1186,11 +1452,41 @@ impl Ui {
             self.rebuild_chain(&order);
             *self.chain_keys.borrow_mut() = keys;
         }
+        if let Some(key) = self.refocus.take()
+            && let Some(card) = self.cards.borrow().iter().find(|card| card.key == key)
+        {
+            card.button.grab_focus();
+        }
+        let chain_count = order
+            .iter()
+            .filter(|spec| spec.chain_label.is_some())
+            .count();
         let previous = self.updating.replace(true);
         for card in self.cards.borrow().iter() {
             let Some(spec) = blocks::spec(card.key) else {
                 continue;
             };
+            if let Some(position) = order
+                .iter()
+                .filter(|spec| spec.chain_label.is_some())
+                .position(|spec| spec.key == card.key)
+            {
+                let position = (position + 1).to_string();
+                let count = chain_count.to_string();
+                let text = if blocks::is_movable(spec) {
+                    trf(
+                        "Position {position} of {count} in the signal chain. Alt+Left and Alt+Right move it.",
+                        &[("position", &position), ("count", &count)],
+                    )
+                } else {
+                    trf(
+                        "Position {position} of {count} in the signal chain. The amp stays in place, effects move around it.",
+                        &[("position", &position), ("count", &count)],
+                    )
+                };
+                card.button
+                    .update_property(&[gtk::accessible::Property::Description(&text)]);
+            }
             if card.key == model.selected {
                 card.root.add_css_class("selected");
             } else {
@@ -1300,6 +1596,7 @@ impl Ui {
         let select_ui = Rc::clone(self);
         button.connect_clicked(move |_| select_ui.select_block(spec.key));
         root.append(&button);
+        let footer = gtk::CenterBox::new();
         let switch = spec.on_param.map(|id| {
             let switch = gtk::Switch::builder().halign(gtk::Align::Center).build();
             switch.update_property(&[gtk::accessible::Property::Label(&trf(
@@ -1312,16 +1609,105 @@ impl Ui {
                     write_ui.edit_param(id, Edit::Discrete(u16::from(switch.is_active())));
                 }
             });
-            root.append(&switch);
+            footer.set_center_widget(Some(&switch));
             switch
         });
+        let (menu, actions) = if blocks::is_movable(spec) {
+            let (menu, actions) = self.card_menu(spec, &root);
+            footer.set_end_widget(Some(&menu));
+            (Some(menu), Some(actions))
+        } else {
+            if spec.key == blocks::ANCHOR {
+                root.add_css_class("chain-anchor");
+                let pin = gtk::Image::builder()
+                    .icon_name("view-pin-symbolic")
+                    .css_classes(["chain-anchor-icon"])
+                    .tooltip_text(tr("The amp stays in place, effects move around it"))
+                    .build();
+                footer.set_end_widget(Some(&pin));
+            }
+            (None, None)
+        };
+        if footer.center_widget().is_some() || footer.end_widget().is_some() {
+            root.append(&footer);
+        }
         Card {
             key: spec.key,
             root,
+            button,
+            menu,
+            actions,
             dot,
             type_label,
             switch,
         }
+    }
+
+    fn card_menu(
+        self: &Rc<Self>,
+        spec: &'static BlockSpec,
+        root: &gtk::Box,
+    ) -> (gtk::MenuButton, gio::SimpleActionGroup) {
+        let actions = gio::SimpleActionGroup::new();
+        let model = gio::Menu::new();
+        let section = gio::Menu::new();
+        for step in Move::ALL {
+            let action = gio::SimpleAction::new(step.action(), None);
+            let move_ui = Rc::clone(self);
+            action.connect_activate(move |_, _| move_ui.move_block(spec.key, step));
+            actions.add_action(&action);
+            let item = gio::MenuItem::new(
+                Some(&tr(step.label())),
+                Some(&format!("card.{}", step.action())),
+            );
+            item.set_attribute_value("accel", Some(&step.accel().to_variant()));
+            if matches!(step, Move::Start) {
+                model.append_section(None, &section);
+            }
+            if matches!(step, Move::Left | Move::Right) {
+                section.append_item(&item);
+            } else {
+                model.append_item(&item);
+            }
+        }
+        root.insert_action_group("card", Some(&actions));
+        let title = tr(spec.title);
+        let menu = gtk::MenuButton::builder()
+            .icon_name("view-more-horizontal-symbolic")
+            .menu_model(&model)
+            .css_classes(["flat", "circular", "chain-more"])
+            .valign(gtk::Align::Center)
+            .tooltip_text(trf("Move {block}", &[("block", &title)]))
+            .build();
+        menu.update_property(&[gtk::accessible::Property::Label(&trf(
+            "Move {block}",
+            &[("block", &title)],
+        ))]);
+        let context = gtk::GestureClick::builder()
+            .button(gtk::gdk::BUTTON_SECONDARY)
+            .build();
+        let popup = menu.clone();
+        context.connect_pressed(move |gesture, _, _, _| {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            popup.popup();
+        });
+        root.add_controller(context);
+        let keys = gtk::EventControllerKey::new();
+        let key_ui = Rc::clone(self);
+        keys.connect_key_pressed(move |_, key, _, state| {
+            if !state.contains(gtk::gdk::ModifierType::ALT_MASK) {
+                return glib::Propagation::Proceed;
+            }
+            match Move::from_key(key) {
+                Some(step) => {
+                    key_ui.move_block(spec.key, step);
+                    glib::Propagation::Stop
+                }
+                None => glib::Propagation::Proceed,
+            }
+        });
+        root.add_controller(keys);
+        (menu, actions)
     }
 
     fn refresh_params(self: &Rc<Self>) {
@@ -1368,6 +1754,20 @@ impl Ui {
         self.params_holder.set_child(Some(&view.root));
         *self.params.borrow_mut() = Some(view);
     }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn parse_hex(text: &str) -> Option<Vec<u8>> {
+    text.split_whitespace()
+        .map(|word| u8::from_str_radix(word, 16).ok())
+        .collect()
 }
 
 fn writable(model: &Model) -> bool {

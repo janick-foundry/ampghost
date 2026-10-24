@@ -213,20 +213,38 @@ pub fn param_value(param: &Param, image: &PatchImage) -> Option<u16> {
     param.decode(&bytes).ok()
 }
 
+pub const ANCHOR: &str = "amp";
+
+const CHAIN_SLOTS: usize = 20;
+
+fn slot_param(table: &ParamTable, slot: usize) -> Option<&Param> {
+    table.get(&format!("chain_blocks_chain_slot_{slot}")).ok()
+}
+
+fn spec_for_code(table: &ParamTable, code: u8) -> Option<&'static BlockSpec> {
+    let label = slot_param(table, 0)?.describe(u16::from(code));
+    BLOCKS
+        .iter()
+        .find(|spec| spec.chain_label == Some(label.as_str()))
+}
+
+pub fn is_movable(spec: &BlockSpec) -> bool {
+    spec.chain_label.is_some() && spec.key != ANCHOR
+}
+
+pub fn chain_codes(table: &ParamTable, image: &PatchImage) -> Option<Vec<u8>> {
+    (0..CHAIN_SLOTS)
+        .map(|slot| {
+            let param = slot_param(table, slot)?;
+            u8::try_from(param_value(param, image)?).ok()
+        })
+        .collect()
+}
+
 pub fn chain_order(table: &ParamTable, image: &PatchImage) -> Vec<&'static BlockSpec> {
     let mut order: Vec<&'static BlockSpec> = Vec::new();
-    for slot in 0..20 {
-        let id = format!("chain_blocks_chain_slot_{slot}");
-        let Ok(param) = table.get(&id) else {
-            continue;
-        };
-        let Some(code) = param_value(param, image) else {
-            continue;
-        };
-        let label = param.describe(code);
-        if let Some(spec) = BLOCKS
-            .iter()
-            .find(|spec| spec.chain_label == Some(label.as_str()))
+    for code in chain_codes(table, image).unwrap_or_default() {
+        if let Some(spec) = spec_for_code(table, code)
             && !order.contains(&spec)
         {
             order.push(spec);
@@ -238,6 +256,30 @@ pub fn chain_order(table: &ParamTable, image: &PatchImage) -> Vec<&'static Block
         }
     }
     order
+}
+
+pub fn reorder(
+    table: &ParamTable,
+    image: &PatchImage,
+    moved: &str,
+    target: usize,
+) -> Option<Vec<u8>> {
+    let mut codes = chain_codes(table, image)?;
+    let mut slots = Vec::new();
+    let mut visible = Vec::new();
+    for (slot, &code) in codes.iter().enumerate() {
+        if let Some(spec) = spec_for_code(table, code) {
+            slots.push(slot);
+            visible.push((spec.key, code));
+        }
+    }
+    let from = visible.iter().position(|(key, _)| *key == moved)?;
+    let item = visible.remove(from);
+    visible.insert(target.min(visible.len()), item);
+    for (slot, (_, code)) in slots.into_iter().zip(visible) {
+        *codes.get_mut(slot)? = code;
+    }
+    Some(codes)
 }
 
 pub fn extras() -> impl Iterator<Item = &'static BlockSpec> {
