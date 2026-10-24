@@ -85,10 +85,10 @@ pub fn build(
         .child(&clamp)
         .build();
     let mut updaters = Vec::new();
-    let main = adw::PreferencesGroup::new();
-    if !structure.writable {
-        main.set_description(Some(&tr("Writing is disabled.")));
-    }
+    let main = Section::new(
+        None,
+        (!structure.writable).then(|| tr("Writing is disabled.")),
+    );
     let leading = [spec.on_param, spec.select_param, spec.type_param];
     for id in leading.into_iter().flatten() {
         let Ok(param) = table.get(id) else {
@@ -109,18 +109,18 @@ pub fn build(
         main.add(&row);
         updaters.push((param.id(), update));
     }
-    content.append(&main);
+    content.append(&main.root);
     let params = blocks::block_params(table, image, spec);
-    let details = adw::PreferencesGroup::builder()
-        .title(tr("Parameters"))
-        .build();
-    if let Some(label) = blocks::type_label(table, image, spec) {
-        details.set_description(Some(&trf("Settings for {type}", &[("type", &label)])));
-    }
+    let details = Section::new(
+        Some(tr("Parameters")),
+        blocks::type_label(table, image, spec)
+            .map(|label| trf("Settings for {type}", &[("type", &label)])),
+    );
     if params.is_empty() {
         details.add(
             &adw::ActionRow::builder()
                 .title(tr("No further parameters"))
+                .title_lines(1)
                 .build(),
         );
     }
@@ -131,7 +131,7 @@ pub fn build(
         details.add(&row);
         updaters.push((param.id(), update));
     }
-    content.append(&details);
+    content.append(&details.root);
     let view = ParamsView {
         root,
         structure,
@@ -140,6 +140,50 @@ pub fn build(
     view.update(table, image, guard, &|_| false);
     guard.set(previous);
     view
+}
+
+struct Section {
+    root: gtk::Box,
+    list: gtk::ListBox,
+}
+
+impl Section {
+    fn new(title: Option<String>, description: Option<String>) -> Self {
+        let root = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(4)
+            .build();
+        if let Some(title) = title {
+            root.append(
+                &gtk::Label::builder()
+                    .label(title)
+                    .xalign(0.0)
+                    .ellipsize(gtk::pango::EllipsizeMode::End)
+                    .css_classes(["heading", "detail-section-title"])
+                    .build(),
+            );
+        }
+        if let Some(description) = description {
+            root.append(
+                &gtk::Label::builder()
+                    .label(description)
+                    .xalign(0.0)
+                    .ellipsize(gtk::pango::EllipsizeMode::End)
+                    .css_classes(["dim-label", "caption", "detail-section-title"])
+                    .build(),
+            );
+        }
+        let list = gtk::ListBox::builder()
+            .selection_mode(gtk::SelectionMode::None)
+            .css_classes(["detail-list"])
+            .build();
+        root.append(&list);
+        Self { root, list }
+    }
+
+    fn add(&self, row: &impl IsA<gtk::Widget>) {
+        self.list.append(row);
+    }
 }
 
 fn make_row(
@@ -183,6 +227,7 @@ fn switch_row(
 ) -> (gtk::Widget, Updater) {
     let row = adw::SwitchRow::builder()
         .title(title)
+        .title_lines(1)
         .use_markup(false)
         .build();
     let id = param.id();
@@ -214,6 +259,7 @@ fn combo_row(
     let model = gtk::StringList::new(&labels.iter().map(String::as_str).collect::<Vec<_>>());
     let row = adw::ComboRow::builder()
         .title(title)
+        .title_lines(1)
         .use_markup(false)
         .model(&model)
         .build();
@@ -315,6 +361,7 @@ fn variant_row(
     });
     let row = adw::ActionRow::builder()
         .title(title)
+        .title_lines(1)
         .use_markup(false)
         .build();
     row.add_suffix(&group);
@@ -334,6 +381,32 @@ fn variant_row(
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn to_raw(value: f64) -> u16 {
     value.round().clamp(0.0, f64::from(u16::MAX)) as u16
+}
+
+fn slider_row(title: &str, scale: &gtk::Scale, value_label: &gtk::Label) -> gtk::ListBoxRow {
+    let title_label = gtk::Label::builder()
+        .label(title)
+        .xalign(0.0)
+        .hexpand(true)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .build();
+    let top = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .build();
+    top.append(&title_label);
+    top.append(value_label);
+    let body = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(2)
+        .css_classes(["detail-slider"])
+        .build();
+    body.append(&top);
+    body.append(scale);
+    gtk::ListBoxRow::builder()
+        .activatable(false)
+        .child(&body)
+        .build()
 }
 
 fn scale_row(
@@ -358,22 +431,15 @@ fn scale_row(
         .draw_value(false)
         .digits(0)
         .round_digits(0)
-        .hexpand(false)
-        .width_request(280)
-        .valign(gtk::Align::Center)
+        .hexpand(true)
+        .css_classes(["detail-scale"])
         .build();
     scale.update_property(&[gtk::accessible::Property::Label(title)]);
     let value_label = gtk::Label::builder()
-        .width_chars(10)
         .xalign(1.0)
         .css_classes(["numeric", "dim-label"])
         .build();
-    let row = adw::ActionRow::builder()
-        .title(title)
-        .use_markup(false)
-        .build();
-    row.add_suffix(&scale);
-    row.add_suffix(&value_label);
+    let row = slider_row(title, &scale, &value_label);
     let id = param.id();
     let handler_guard = Rc::clone(guard);
     let callback = Rc::clone(on_change);
@@ -447,6 +513,8 @@ fn spin_row(
 ) -> (gtk::Widget, Updater) {
     let row = adw::SpinRow::with_range(f64::from(raw_min), f64::from(raw_max), 1.0);
     row.set_title(title);
+    row.set_title_lines(1);
+    row.set_subtitle_lines(1);
     row.set_use_markup(false);
     let id = param.id();
     let handler_guard = Rc::clone(guard);

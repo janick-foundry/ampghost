@@ -137,3 +137,23 @@
   border-radius: 2px;
   background-color: var(--accent-bg-color);
 }
+
+.detail-list {
+  background: none;
+}
+
+.detail-list > row {
+  border-radius: 8px;
+}
+
+.detail-section-title {
+  margin: 0 12px;
+}
+
+.detail-slider {
+  padding: 10px 12px 4px;
+}
+
+.detail-slider .detail-scale {
+  margin: 0 -10px;
+}
