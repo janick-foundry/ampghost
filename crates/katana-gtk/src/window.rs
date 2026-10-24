@@ -1765,7 +1765,10 @@ impl Ui {
         root.append(&button);
         let footer = gtk::CenterBox::new();
         let switch = spec.on_param.map(|id| {
-            let switch = gtk::Switch::builder().halign(gtk::Align::Center).build();
+            let switch = gtk::Switch::builder()
+                .halign(gtk::Align::Center)
+                .valign(gtk::Align::Center)
+                .build();
             switch.update_property(&[gtk::accessible::Property::Label(&trf(
                 "Enable {block}",
                 &[("block", &tr(spec.title))],
@@ -1790,6 +1793,7 @@ impl Ui {
                 let pin = gtk::Image::builder()
                     .icon_name("view-pin-symbolic")
                     .css_classes(["chain-anchor-icon"])
+                    .valign(gtk::Align::Center)
                     .tooltip_text(tr("The amp stays in place, effects move around it"))
                     .build();
                 footer.set_end_widget(Some(&pin));
