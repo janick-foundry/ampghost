@@ -630,19 +630,33 @@ impl Ui {
         }
     }
 
-    fn connect_card_drag(self: &Rc<Self>, spec: &'static BlockSpec, root: &gtk::Box) {
+    fn connect_card_drag(
+        self: &Rc<Self>,
+        spec: &'static BlockSpec,
+        root: &gtk::Box,
+        bar: &gtk::Box,
+    ) {
         let source = gtk::DragSource::builder()
             .actions(gtk::gdk::DragAction::MOVE)
-            .propagation_phase(gtk::PropagationPhase::Capture)
             .build();
         let hotspot = Rc::new(Cell::new((0, 0)));
         let prepare_ui = Rc::downgrade(self);
         let prepare_hotspot = Rc::clone(&hotspot);
+        let prepare_root = root.downgrade();
+        let prepare_bar = bar.downgrade();
         source.connect_prepare(move |_, x, y| {
             let ui = prepare_ui.upgrade()?;
             if !ui.chain_editable() {
                 return None;
             }
+            let (dx, dy) = prepare_bar
+                .upgrade()
+                .zip(prepare_root.upgrade())
+                .and_then(|(bar, root)| bar.compute_bounds(&root))
+                .map_or((0.0, 0.0), |bounds| {
+                    (f64::from(bounds.x()), f64::from(bounds.y()))
+                });
+            let (x, y) = (x + dx, y + dy);
             prepare_hotspot.set((round_to_i32(x), round_to_i32(y)));
             Some(gtk::gdk::ContentProvider::for_value(&spec.key.to_value()))
         });
@@ -656,6 +670,7 @@ impl Ui {
             let (x, y) = hotspot.get();
             source.set_icon(Some(&icon), x, y);
             root.add_css_class("dragging");
+            root.set_cursor_from_name(Some("grabbing"));
             if let Some(ui) = begin_ui.upgrade() {
                 ui.dragging.set(Some(spec.key));
             }
@@ -665,13 +680,14 @@ impl Ui {
         source.connect_drag_end(move |_, _, _| {
             if let Some(root) = end_root.upgrade() {
                 root.remove_css_class("dragging");
+                root.set_cursor(None);
             }
             if let Some(ui) = end_ui.upgrade() {
                 ui.dragging.set(None);
                 ui.show_drop_gap(None);
             }
         });
-        root.add_controller(source);
+        bar.add_controller(source);
     }
 
     fn on_close_request(&self) -> glib::Propagation {
@@ -1723,9 +1739,16 @@ impl Ui {
     fn make_card(self: &Rc<Self>, spec: &'static BlockSpec) -> Card {
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .spacing(6)
             .css_classes(["card", "chain-block"])
+            .overflow(gtk::Overflow::Hidden)
             .build();
+        let body = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(6)
+            .vexpand(true)
+            .css_classes(["chain-body"])
+            .build();
+        root.append(&body);
         let dot = gtk::Box::builder()
             .css_classes(["variant-dot", "variant-none"])
             .valign(gtk::Align::Center)
@@ -1762,8 +1785,7 @@ impl Ui {
             .build();
         let select_ui = Rc::clone(self);
         button.connect_clicked(move |_| select_ui.select_block(spec.key));
-        root.append(&button);
-        let footer = gtk::CenterBox::new();
+        body.append(&button);
         let switch = spec.on_param.map(|id| {
             let switch = gtk::Switch::builder()
                 .halign(gtk::Align::Center)
@@ -1779,30 +1801,18 @@ impl Ui {
                     write_ui.edit_param(id, Edit::Discrete(u16::from(switch.is_active())));
                 }
             });
-            footer.set_center_widget(Some(&switch));
+            body.append(&switch);
             switch
         });
         let (menu, actions) = if blocks::is_movable(spec) {
-            self.connect_card_drag(spec, &root);
             let (menu, actions) = self.card_menu(spec, &root);
-            footer.set_end_widget(Some(&menu));
+            let bar = Self::grab_bar(spec, &menu);
+            self.connect_card_drag(spec, &root, &bar);
+            root.append(&bar);
             (Some(menu), Some(actions))
         } else {
-            if spec.key == blocks::ANCHOR {
-                root.add_css_class("chain-anchor");
-                let pin = gtk::Image::builder()
-                    .icon_name("view-pin-symbolic")
-                    .css_classes(["chain-anchor-icon"])
-                    .valign(gtk::Align::Center)
-                    .tooltip_text(tr("The amp stays in place, effects move around it"))
-                    .build();
-                footer.set_end_widget(Some(&pin));
-            }
             (None, None)
         };
-        if footer.center_widget().is_some() || footer.end_widget().is_some() {
-            root.append(&footer);
-        }
         Card {
             key: spec.key,
             root,
@@ -1813,6 +1823,30 @@ impl Ui {
             type_label,
             switch,
         }
+    }
+
+    fn grab_bar(spec: &'static BlockSpec, menu: &gtk::MenuButton) -> gtk::Box {
+        let title = tr(spec.title);
+        let bar = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .css_classes(["chain-grab"])
+            .tooltip_text(trf("Drag to move {block}", &[("block", &title)]))
+            .build();
+        bar.set_cursor_from_name(Some("grab"));
+        bar.update_property(&[gtk::accessible::Property::Label(&trf(
+            "Move {block}",
+            &[("block", &title)],
+        ))]);
+        let center = gtk::CenterBox::builder().hexpand(true).build();
+        let grip = gtk::Image::builder()
+            .icon_name("list-drag-handle-symbolic")
+            .css_classes(["chain-grip"])
+            .valign(gtk::Align::Center)
+            .build();
+        center.set_center_widget(Some(&grip));
+        center.set_end_widget(Some(menu));
+        bar.append(&center);
+        bar
     }
 
     fn card_menu(
