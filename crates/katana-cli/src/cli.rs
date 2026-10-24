@@ -37,6 +37,10 @@ pub enum Action {
         #[arg(value_name = "FILE.syx")]
         file: PathBuf,
     },
+    WriteChain {
+        #[arg(value_name = "HEX", required = true)]
+        order: Vec<String>,
+    },
     ReadParam {
         id: String,
     },

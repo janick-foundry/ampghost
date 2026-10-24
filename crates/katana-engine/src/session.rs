@@ -380,6 +380,23 @@ impl Session {
         }
     }
 
+    pub(crate) fn write_chain(
+        &mut self,
+        target: &PatchImage,
+        sink: &mut dyn FnMut(Event),
+    ) -> Result<(usize, PatchImage), EngineError> {
+        let profile = self.profile()?;
+        let plan = profile.chain_write_plan(target)?;
+        self.editor_mode_on(sink)?;
+        let packets = plan.len();
+        sink(Event::Progress(Stage::Writing { packets }));
+        self.send_packets(&plan)?;
+        self.drain(self.timings.settle)?;
+        sink(Event::Progress(Stage::Verifying { attempt: 1 }));
+        let actual = self.read_temp()?;
+        Ok((packets, actual))
+    }
+
     pub(crate) fn switch_channel(
         &mut self,
         channel: Channel,

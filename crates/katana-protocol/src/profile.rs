@@ -62,6 +62,55 @@ impl DeviceProfile {
         self.checked(packets)
     }
 
+    pub fn chain_order(&self, image: &PatchImage) -> Option<Vec<u8>> {
+        self.write_order
+            .effect_chain
+            .offsets()
+            .map(|offset| image.get(offset))
+            .collect()
+    }
+
+    pub fn validate_chain(&self, order: &[u8]) -> Result<(), ProtocolError> {
+        let expected = usize::try_from(self.write_order.effect_chain.len()).unwrap_or_default();
+        let mut seen = vec![false; expected];
+        let valid = order.len() == expected
+            && order.iter().all(|&block| {
+                seen.get_mut(usize::from(block))
+                    .is_some_and(|slot| !std::mem::replace(slot, true))
+            });
+        if valid {
+            Ok(())
+        } else {
+            Err(ProtocolError::InvalidChain {
+                expected,
+                order: order.to_vec(),
+            })
+        }
+    }
+
+    pub fn with_chain(
+        &self,
+        image: &PatchImage,
+        order: &[u8],
+    ) -> Result<PatchImage, ProtocolError> {
+        self.validate_chain(order)?;
+        let mut target = image.clone();
+        for (offset, &block) in self.write_order.effect_chain.offsets().zip(order) {
+            target.set(offset, block)?;
+        }
+        Ok(target)
+    }
+
+    pub fn chain_write_plan(&self, image: &PatchImage) -> Result<Vec<Dt1>, ProtocolError> {
+        let span = self.write_order.effect_chain;
+        let order = self
+            .chain_order(image)
+            .ok_or(ProtocolError::OutsideLayout(span.start().linear()))?;
+        self.validate_chain(&order)?;
+        let packet = Dt1::new(span.start().address(self.temp_patch)?, order)?;
+        self.checked(vec![packet])
+    }
+
     pub fn check_write(&self, packet: &Dt1) -> Result<(), ProtocolError> {
         let forbidden = || ProtocolError::WriteForbidden {
             address: packet.address(),

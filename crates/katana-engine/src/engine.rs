@@ -3,14 +3,16 @@ use std::time::Duration;
 
 use katana_midi::{MidiBackend, katana_candidates};
 use katana_params::ParamTable;
-use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset};
+use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset, ProtocolError, verify};
 use katana_store::{
     Preset, PresetStorage, decode_preset, decode_syx, encode_preset, encode_syx, preset_key,
     read_preset_summary, validate_key,
 };
 
 use crate::clock::Clock;
-use crate::command::{Command, DetectReport, Event, ParamWrite, PresetEntry, WriteOutcome};
+use crate::command::{
+    ChainOutcome, Command, DetectReport, Event, ParamWrite, PresetEntry, WriteOutcome,
+};
 use crate::error::EngineError;
 use crate::session::Session;
 use crate::timings::Timings;
@@ -112,6 +114,7 @@ impl Engine {
             Command::WriteParams(writes) => {
                 self.write_params(&writes, sink).map(Event::WriteVerified)
             }
+            Command::WriteChain(order) => self.write_chain(order, sink).map(Event::ChainWritten),
             Command::SwitchChannel(channel) => self
                 .session()?
                 .switch_channel(channel, sink)
@@ -203,6 +206,65 @@ impl Engine {
             });
         }
         session.write_verified(&target, Some(&changed), sink)
+    }
+
+    fn write_chain(
+        &mut self,
+        order: Vec<u8>,
+        sink: &mut dyn FnMut(Event),
+    ) -> Result<ChainOutcome, EngineError> {
+        let session = self.session()?;
+        let profile = session.profile()?;
+        profile.validate_chain(&order)?;
+        let chain_start = profile.write_order.effect_chain.start().linear();
+        let current = session.read_temp()?;
+        let previous = profile
+            .chain_order(&current)
+            .ok_or(ProtocolError::OutsideLayout(chain_start))?;
+        if previous == order {
+            return Ok(ChainOutcome {
+                actual: previous.clone(),
+                previous,
+                requested: order,
+                packets: 0,
+                report: katana_protocol::VerifyReport::default(),
+                image: current,
+            });
+        }
+        let target = profile.with_chain(&current, &order)?;
+        tracing::info!(from = %hex(&previous), to = %hex(&order), "writing effect chain");
+        let (packets, image) = session.write_chain(&target, sink)?;
+        let actual = profile
+            .chain_order(&image)
+            .ok_or(ProtocolError::OutsideLayout(chain_start))?;
+        let report = verify(&target, &image, &profile.verify_rules);
+        if actual == order {
+            tracing::info!(packets, "effect chain verified");
+        } else {
+            tracing::warn!(
+                requested = %hex(&order),
+                actual = %hex(&actual),
+                "amp normalised the effect chain"
+            );
+        }
+        let span = profile.write_order.effect_chain;
+        let elsewhere = report
+            .mismatches
+            .iter()
+            .filter(|mismatch| !span.contains(mismatch.offset))
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        if !elsewhere.is_empty() {
+            tracing::warn!(bytes = elsewhere.len(), differing = %elsewhere.join(", "), "amp changed other bytes after the chain write");
+        }
+        Ok(ChainOutcome {
+            previous,
+            requested: order,
+            actual,
+            packets,
+            report,
+            image,
+        })
     }
 
     fn list_presets(&self) -> Result<Vec<PresetEntry>, EngineError> {
@@ -349,4 +411,12 @@ fn link_variant_types(
         }
     }
     Ok(())
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }

@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 
-use katana_engine::{DetectReport, WriteOutcome};
-use katana_protocol::{Dt1, PatchImage};
+use katana_engine::{ChainOutcome, DetectReport, WriteOutcome};
+use katana_protocol::{Dt1, KATANA_50_MK2, PatchImage};
 use sha2::{Digest, Sha256};
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -96,5 +96,38 @@ pub fn print_outcome(outcome: &WriteOutcome) {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+    }
+}
+
+pub fn print_chain_outcome(outcome: &ChainOutcome) {
+    println!("chain was:  {}", hex(&outcome.previous));
+    println!("requested:  {}", hex(&outcome.requested));
+    if outcome.packets == 0 {
+        println!("chain:      nothing to write, temp already holds this order");
+        return;
+    }
+    println!("read back:  {}", hex(&outcome.actual));
+    if outcome.is_normalised() {
+        println!("chain:      the amp normalised the order (not retried)");
+    } else {
+        println!(
+            "chain:      kept exactly, {} packet(s) sent",
+            outcome.packets
+        );
+    }
+    let other = outcome
+        .report
+        .mismatches
+        .iter()
+        .filter(|mismatch| {
+            !KATANA_50_MK2
+                .write_order
+                .effect_chain
+                .contains(mismatch.offset)
+        })
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    if !other.is_empty() {
+        println!("other bytes changed by the amp: {}", other.join(", "));
     }
 }

@@ -15,7 +15,9 @@ use katana_store::{
 };
 
 use crate::cli::{Action, Args};
-use crate::output::{print_detect, print_dump, print_image, print_outcome, sha256_hex};
+use crate::output::{
+    print_chain_outcome, print_detect, print_dump, print_image, print_outcome, sha256_hex,
+};
 
 const EVENT_TIMEOUT: Duration = Duration::from_secs(60);
 const PROFILE: &DeviceProfile = &KATANA_50_MK2;
@@ -158,6 +160,13 @@ impl Driver {
                 println!("writing:    {} ({})", file.display(), image.name());
                 match self.request(Command::WriteTemp(image))? {
                     Event::WriteVerified(outcome) => print_outcome(&outcome),
+                    other => bail!("unexpected engine event {other:?}"),
+                }
+            }
+            Action::WriteChain { order } => {
+                let order = parse_chain(&order)?;
+                match self.request(Command::WriteChain(order))? {
+                    Event::ChainWritten(outcome) => print_chain_outcome(&outcome),
                     other => bail!("unexpected engine event {other:?}"),
                 }
             }
@@ -374,6 +383,17 @@ fn read_value(param: &Param, image: &PatchImage) -> Result<u16> {
         .collect::<Option<Vec<u8>>>()
         .context("parameter lies outside the patch data")?;
     Ok(param.decode(&bytes)?)
+}
+
+fn parse_chain(words: &[String]) -> Result<Vec<u8>> {
+    words
+        .iter()
+        .flat_map(|word| word.split([' ', ',']))
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            u8::from_str_radix(word, 16).with_context(|| format!("{word:?} is not a hex byte"))
+        })
+        .collect()
 }
 
 fn default_backup_key() -> String {

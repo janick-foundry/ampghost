@@ -14,6 +14,7 @@ pub enum Command {
     ReadTemp,
     WriteTemp(PatchImage),
     WriteParams(Vec<ParamWrite>),
+    WriteChain(Vec<u8>),
     SwitchChannel(Channel),
     BackupTemp { key: String },
     RestoreBackup { key: String },
@@ -60,6 +61,22 @@ pub struct WriteOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChainOutcome {
+    pub previous: Vec<u8>,
+    pub requested: Vec<u8>,
+    pub actual: Vec<u8>,
+    pub packets: usize,
+    pub report: VerifyReport,
+    pub image: PatchImage,
+}
+
+impl ChainOutcome {
+    pub fn is_normalised(&self) -> bool {
+        self.actual != self.requested
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SwitchOutcome {
     pub channel: Channel,
     pub program: u8,
@@ -101,6 +118,7 @@ pub enum Event {
     TempRead(PatchImage),
     Progress(Stage),
     WriteVerified(WriteOutcome),
+    ChainWritten(ChainOutcome),
     ChannelSwitched(SwitchOutcome),
     BackupSaved {
         key: String,

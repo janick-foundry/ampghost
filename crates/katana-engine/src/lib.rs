@@ -11,8 +11,8 @@ mod timings;
 
 pub use clock::Clock;
 pub use command::{
-    AmpSwitch, Command, DetectReport, DeviceInfo, Event, ParamWrite, PresetEntry, Stage,
-    SwitchOutcome, WriteOutcome,
+    AmpSwitch, ChainOutcome, Command, DetectReport, DeviceInfo, Event, ParamWrite, PresetEntry,
+    Stage, SwitchOutcome, WriteOutcome,
 };
 pub use engine::{Engine, apply_param_writes};
 pub use error::EngineError;

@@ -553,6 +553,7 @@ impl Ui {
                 );
                 self.set_image(outcome.image);
             }
+            Event::ChainWritten(outcome) => self.set_image(outcome.image),
             Event::ChannelSwitched(outcome) => {
                 self.model.borrow_mut().channel = Some(outcome.channel);
                 self.set_clean_image(outcome.temp);
