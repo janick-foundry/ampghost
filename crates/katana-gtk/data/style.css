@@ -77,7 +77,7 @@
 }
 
 .chain-grab {
-  padding: 2px 6px;
+  padding: 7px 6px;
   border-top: 1px solid alpha(currentColor, 0.08);
   transition: background-color 150ms ease;
 }
