@@ -190,7 +190,7 @@ pub struct Ui {
     chain_box: gtk::Box,
     extras_box: gtk::Box,
     params_holder: adw::Bin,
-    detail_split: adw::OverlaySplitView,
+    detail_reveal: gtk::Revealer,
     detail_title: gtk::Label,
     detail_subtitle: gtk::Label,
     preset_list: gtk::ListBox,
@@ -375,6 +375,7 @@ fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
     let chain_wrap = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .halign(gtk::Align::Start)
+        .margin_bottom(SCROLLBAR_ROOM)
         .build();
     chain_wrap.append(&flow_arrow());
     chain_wrap.append(&chain_box);
@@ -393,6 +394,7 @@ fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
     let extras_wrap = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .halign(gtk::Align::Start)
+        .margin_bottom(SCROLLBAR_ROOM)
         .build();
     extras_wrap.append(&flow_arrow());
     extras_wrap.append(&extras_box);
@@ -446,21 +448,11 @@ fn flow_arrow() -> gtk::DrawingArea {
     area
 }
 
-fn collapse_breakpoint(split: &adw::OverlaySplitView) -> adw::Breakpoint {
-    let narrow = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
-        adw::BreakpointConditionLengthType::MaxWidth,
-        DETAIL_COLLAPSE_WIDTH,
-        adw::LengthUnit::Sp,
-    ));
-    narrow.add_setter(split, "collapsed", Some(&true.to_value()));
-    narrow
-}
-
-fn build_detail_split(
+fn build_detail_overlay(
     channel_section: &adw::Clamp,
     blocks_row: &gtk::Box,
     detail: &gtk::Box,
-) -> adw::OverlaySplitView {
+) -> (gtk::Overlay, gtk::Revealer) {
     let main = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .build();
@@ -471,17 +463,17 @@ fn build_detail_split(
         .vexpand(true)
         .child(&main)
         .build();
-    adw::OverlaySplitView::builder()
-        .sidebar(detail)
-        .content(&main_scroller)
-        .sidebar_position(gtk::PackType::End)
-        .pin_sidebar(true)
-        .min_sidebar_width(DETAIL_MIN_WIDTH)
-        .max_sidebar_width(DETAIL_MAX_WIDTH)
-        .sidebar_width_fraction(0.3)
-        .show_sidebar(false)
-        .css_classes(["detail-split"])
-        .build()
+    let reveal = gtk::Revealer::builder()
+        .transition_type(gtk::RevealerTransitionType::SlideLeft)
+        .transition_duration(200)
+        .halign(gtk::Align::End)
+        .valign(gtk::Align::Fill)
+        .reveal_child(false)
+        .child(detail)
+        .build();
+    let overlay = gtk::Overlay::builder().child(&main_scroller).build();
+    overlay.add_overlay(&reveal);
+    (overlay, reveal)
 }
 
 fn build_detail() -> (gtk::Box, adw::Bin, gtk::Label, gtk::Label) {
@@ -521,6 +513,11 @@ fn build_detail() -> (gtk::Box, adw::Bin, gtk::Label, gtk::Label) {
     let holder = adw::Bin::builder().vexpand(true).build();
     let panel = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
+        .width_request(DETAIL_WIDTH)
+        .margin_top(DETAIL_MARGIN)
+        .margin_bottom(DETAIL_MARGIN)
+        .margin_start(DETAIL_MARGIN)
+        .margin_end(DETAIL_MARGIN)
         .css_classes(["card", "detail-sheet"])
         .overflow(gtk::Overflow::Hidden)
         .build();
@@ -530,9 +527,9 @@ fn build_detail() -> (gtk::Box, adw::Bin, gtk::Label, gtk::Label) {
 }
 
 const DRAG_ICON_MARGIN: u8 = 24;
-const DETAIL_MIN_WIDTH: f64 = 420.0;
-const DETAIL_MAX_WIDTH: f64 = 460.0;
-const DETAIL_COLLAPSE_WIDTH: f64 = 1500.0;
+const DETAIL_WIDTH: i32 = 440;
+const DETAIL_MARGIN: i32 = 12;
+const SCROLLBAR_ROOM: i32 = 16;
 const WINDOW_MIN_WIDTH: i32 = 960;
 const WINDOW_MIN_HEIGHT: i32 = 600;
 
@@ -579,8 +576,7 @@ impl Ui {
         let (sidebar, preset_search, preset_list) = build_sidebar();
         let (blocks_row, chain_box, extras_box) = build_blocks_row();
         let (detail, params_holder, detail_title, detail_subtitle) = build_detail();
-        let detail_split = build_detail_split(&channel_section, &blocks_row, &detail);
-        let editor = detail_split.clone();
+        let (editor, detail_reveal) = build_detail_overlay(&channel_section, &blocks_row, &detail);
 
         let retry_button = gtk::Button::builder()
             .label(tr("Try Again"))
@@ -619,7 +615,6 @@ impl Ui {
             .height_request(WINDOW_MIN_HEIGHT)
             .content(&toasts)
             .build();
-        window.add_breakpoint(collapse_breakpoint(&detail_split));
 
         let ui = Rc::new(Self {
             table,
@@ -635,7 +630,7 @@ impl Ui {
             chain_box,
             extras_box,
             params_holder,
-            detail_split,
+            detail_reveal,
             detail_title,
             detail_subtitle,
             preset_list,
@@ -701,22 +696,6 @@ impl Ui {
     }
 
     fn connect_detail(self: &Rc<Self>) {
-        let shown_ui = Rc::downgrade(self);
-        self.detail_split.connect_show_sidebar_notify(move |split| {
-            let Some(ui) = shown_ui.upgrade() else {
-                return;
-            };
-            let shown = split.shows_sidebar();
-            let changed = {
-                let mut model = ui.model.borrow_mut();
-                let changed = model.detail_open != shown;
-                model.detail_open = shown;
-                changed
-            };
-            if changed {
-                ui.refresh_chain();
-            }
-        });
         let keys = gtk::EventControllerKey::new();
         let key_ui = Rc::downgrade(self);
         keys.connect_key_pressed(move |_, key, _, _| {
@@ -1634,8 +1613,18 @@ impl Ui {
 
     fn refresh_detail(&self) {
         let open = self.model.borrow().detail_open;
-        if self.detail_split.shows_sidebar() != open {
-            self.detail_split.set_show_sidebar(open);
+        if self.detail_reveal.reveals_child() != open {
+            self.detail_reveal.set_reveal_child(open);
+        }
+        let room = if open {
+            DETAIL_WIDTH + 2 * DETAIL_MARGIN
+        } else {
+            0
+        };
+        for row in [&self.chain_box, &self.extras_box] {
+            if let Some(wrap) = row.parent() {
+                wrap.set_margin_end(room);
+            }
         }
     }
 

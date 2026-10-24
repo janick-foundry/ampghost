@@ -30,26 +30,8 @@
   background-color: color-mix(in srgb, var(--accent-bg-color) 16%, transparent);
 }
 
-.detail-split > .sidebar-pane {
-  background: none;
-  border: none;
-  box-shadow: none;
-}
-
-.detail-split > dimming,
-.detail-split > shadow,
-.detail-split > border,
-.detail-split > outline {
-  background: none;
-  box-shadow: none;
-}
-
 .detail-sheet {
-  margin: 12px 12px 12px 6px;
-}
-
-.detail-split.collapsed .detail-sheet {
-  box-shadow: 0 4px 24px rgb(0 0 0 / 22%), 0 0 0 1px rgb(0 0 0 / 6%);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 14%), 0 1px 4px rgb(0 0 0 / 8%), 0 0 0 1px rgb(0 0 0 / 5%);
 }
 
 .detail-head {
