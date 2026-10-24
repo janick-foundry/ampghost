@@ -428,6 +428,34 @@ fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box) {
     (blocks_row, chain_box, extras_box)
 }
 
+const DRAG_ICON_MARGIN: u8 = 24;
+
+fn drag_icon(card: &gtk::Box) -> Option<gtk::gdk::Paintable> {
+    let bounds = card.compute_bounds(card)?;
+    let (width, height) = (bounds.width(), bounds.height());
+    let margin = f32::from(DRAG_ICON_MARGIN);
+    let image = gtk::WidgetPaintable::new(Some(card)).current_image();
+    let snapshot = gtk::Snapshot::new();
+    snapshot.translate(&gtk::graphene::Point::new(margin, margin));
+    let outline =
+        gtk::gsk::RoundedRect::from_rect(gtk::graphene::Rect::new(0.0, 0.0, width, height), 12.0);
+    snapshot.append_outset_shadow(
+        &outline,
+        &gtk::gdk::RGBA::new(0.0, 0.0, 0.0, 0.22),
+        0.0,
+        6.0,
+        0.0,
+        16.0,
+    );
+    snapshot.push_rounded_clip(&outline);
+    image.snapshot(&snapshot, f64::from(width), f64::from(height));
+    snapshot.pop();
+    snapshot.to_paintable(Some(&gtk::graphene::Size::new(
+        width + 2.0 * margin,
+        height + 2.0 * margin,
+    )))
+}
+
 fn section_heading(text: &str) -> gtk::Label {
     gtk::Label::builder()
         .label(text)
@@ -673,9 +701,14 @@ impl Ui {
             let Some(root) = begin_root.upgrade() else {
                 return;
             };
-            let icon = gtk::WidgetPaintable::new(Some(&root)).current_image();
             let (x, y) = hotspot.get();
-            source.set_icon(Some(&icon), x, y);
+            if let Some(icon) = drag_icon(&root) {
+                source.set_icon(
+                    Some(&icon),
+                    x + i32::from(DRAG_ICON_MARGIN),
+                    y + i32::from(DRAG_ICON_MARGIN),
+                );
+            }
             root.add_css_class("dragging");
             root.set_cursor_from_name(Some("grabbing"));
             if let Some(ui) = begin_ui.upgrade() {
