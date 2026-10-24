@@ -75,3 +75,14 @@
   min-height: 24px;
   padding: 0;
 }
+
+.chain-block.dragging {
+  opacity: 0.35;
+}
+
+.drop-indicator {
+  min-width: 4px;
+  margin: 6px 8px;
+  border-radius: 2px;
+  background-color: var(--accent-bg-color);
+}

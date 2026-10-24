@@ -142,6 +142,49 @@ impl Move {
     }
 }
 
+struct Gap {
+    root: gtk::Box,
+    indicator: gtk::Box,
+    arrow: Option<gtk::Image>,
+}
+
+impl Gap {
+    fn new(with_arrow: bool) -> Self {
+        let indicator = gtk::Box::builder()
+            .css_classes(["drop-indicator"])
+            .visible(false)
+            .build();
+        let root = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .visible(with_arrow)
+            .build();
+        root.append(&indicator);
+        let arrow = with_arrow.then(|| {
+            let arrow = gtk::Image::builder()
+                .icon_name("go-next-symbolic")
+                .css_classes(["chain-arrow"])
+                .margin_start(2)
+                .margin_end(2)
+                .build();
+            root.append(&arrow);
+            arrow
+        });
+        Self {
+            root,
+            indicator,
+            arrow,
+        }
+    }
+
+    fn set_active(&self, active: bool) {
+        self.indicator.set_visible(active);
+        match &self.arrow {
+            Some(arrow) => arrow.set_visible(!active),
+            None => self.root.set_visible(active),
+        }
+    }
+}
+
 struct Card {
     key: &'static str,
     root: gtk::Box,
@@ -182,6 +225,9 @@ pub struct Ui {
     cards: RefCell<Vec<Card>>,
     chain_keys: RefCell<Vec<&'static str>>,
     refocus: Cell<Option<&'static str>>,
+    gaps: RefCell<Vec<Gap>>,
+    dragging: Cell<Option<&'static str>>,
+    drop_gap: Cell<Option<usize>>,
     chain_toast: RefCell<Option<adw::Toast>>,
     params: RefCell<Option<ParamsView>>,
     search_text: Rc<RefCell<String>>,
@@ -470,11 +516,15 @@ impl Ui {
             cards: RefCell::new(Vec::new()),
             chain_keys: RefCell::new(Vec::new()),
             refocus: Cell::new(None),
+            gaps: RefCell::new(Vec::new()),
+            dragging: Cell::new(None),
+            drop_gap: Cell::new(None),
             chain_toast: RefCell::new(None),
             params: RefCell::new(None),
             search_text: Rc::new(RefCell::new(String::new())),
         });
         ui.connect_sidebar();
+        ui.connect_chain_drop();
         let close_ui = Rc::clone(&ui);
         ui.window
             .connect_close_request(move |_| close_ui.on_close_request());
@@ -505,6 +555,123 @@ impl Ui {
             *search_ui.search_text.borrow_mut() = entry.text().to_string();
             search_ui.preset_list.invalidate_filter();
         });
+    }
+
+    fn connect_chain_drop(self: &Rc<Self>) {
+        let target = gtk::DropTarget::new(glib::Type::STRING, gtk::gdk::DragAction::MOVE);
+        let motion_ui = Rc::downgrade(self);
+        target.connect_motion(move |_, x, _| {
+            let Some(ui) = motion_ui.upgrade() else {
+                return gtk::gdk::DragAction::empty();
+            };
+            if ui.dragging.get().is_none() {
+                return gtk::gdk::DragAction::empty();
+            }
+            ui.show_drop_gap(ui.useful_drop_gap(x));
+            gtk::gdk::DragAction::MOVE
+        });
+        let leave_ui = Rc::downgrade(self);
+        target.connect_leave(move |_| {
+            if let Some(ui) = leave_ui.upgrade() {
+                ui.show_drop_gap(None);
+            }
+        });
+        let drop_ui = Rc::downgrade(self);
+        target.connect_drop(move |_, value, x, _| {
+            let Some(ui) = drop_ui.upgrade() else {
+                return false;
+            };
+            ui.show_drop_gap(None);
+            let Some(key) = ui.dragging.get() else {
+                return false;
+            };
+            if value.get::<String>().ok().as_deref() != Some(key) {
+                return false;
+            }
+            let Some((from, gap)) = ui.chain_position(key).zip(ui.useful_drop_gap(x)) else {
+                return false;
+            };
+            let target = if gap > from { gap - 1 } else { gap };
+            glib::idle_add_local_once(move || ui.move_block_to(key, target));
+            true
+        });
+        self.chain_box.add_controller(target);
+    }
+
+    fn chain_position(&self, key: &str) -> Option<usize> {
+        self.chain_keys
+            .borrow()
+            .iter()
+            .filter(|candidate| {
+                blocks::spec(candidate).is_some_and(|spec| spec.chain_label.is_some())
+            })
+            .position(|candidate| *candidate == key)
+    }
+
+    fn useful_drop_gap(&self, x: f64) -> Option<usize> {
+        let key = self.dragging.get()?;
+        let from = self.chain_position(key)?;
+        let cards = self.cards.borrow();
+        let gap = cards
+            .iter()
+            .filter(|card| blocks::spec(card.key).is_some_and(|spec| spec.chain_label.is_some()))
+            .filter_map(|card| card.root.compute_bounds(&self.chain_box))
+            .filter(|bounds| f64::from(bounds.x() + bounds.width() / 2.0) < x)
+            .count();
+        (gap != from && gap != from + 1).then_some(gap)
+    }
+
+    fn show_drop_gap(&self, gap: Option<usize>) {
+        if self.drop_gap.replace(gap) == gap {
+            return;
+        }
+        for (index, item) in self.gaps.borrow().iter().enumerate() {
+            item.set_active(Some(index) == gap);
+        }
+    }
+
+    fn connect_card_drag(self: &Rc<Self>, spec: &'static BlockSpec, root: &gtk::Box) {
+        let source = gtk::DragSource::builder()
+            .actions(gtk::gdk::DragAction::MOVE)
+            .propagation_phase(gtk::PropagationPhase::Capture)
+            .build();
+        let hotspot = Rc::new(Cell::new((0, 0)));
+        let prepare_ui = Rc::downgrade(self);
+        let prepare_hotspot = Rc::clone(&hotspot);
+        source.connect_prepare(move |_, x, y| {
+            let ui = prepare_ui.upgrade()?;
+            if !ui.chain_editable() {
+                return None;
+            }
+            prepare_hotspot.set((round_to_i32(x), round_to_i32(y)));
+            Some(gtk::gdk::ContentProvider::for_value(&spec.key.to_value()))
+        });
+        let begin_ui = Rc::downgrade(self);
+        let begin_root = root.downgrade();
+        source.connect_drag_begin(move |source, _| {
+            let Some(root) = begin_root.upgrade() else {
+                return;
+            };
+            let icon = gtk::WidgetPaintable::new(Some(&root)).current_image();
+            let (x, y) = hotspot.get();
+            source.set_icon(Some(&icon), x, y);
+            root.add_css_class("dragging");
+            if let Some(ui) = begin_ui.upgrade() {
+                ui.dragging.set(Some(spec.key));
+            }
+        });
+        let end_ui = Rc::downgrade(self);
+        let end_root = root.downgrade();
+        source.connect_drag_end(move |_, _, _| {
+            if let Some(root) = end_root.upgrade() {
+                root.remove_css_class("dragging");
+            }
+            if let Some(ui) = end_ui.upgrade() {
+                ui.dragging.set(None);
+                ui.show_drop_gap(None);
+            }
+        });
+        root.add_controller(source);
     }
 
     fn on_close_request(&self) -> glib::Propagation {
@@ -1532,25 +1699,25 @@ impl Ui {
             }
         }
         let mut cards = Vec::new();
+        let mut gaps = Vec::new();
         for spec in order {
             let card = self.make_card(spec);
             if spec.chain_label.is_none() {
                 self.extras_box.append(&card.root);
             } else {
-                if self.chain_box.first_child().is_some() {
-                    let arrow = gtk::Image::builder()
-                        .icon_name("go-next-symbolic")
-                        .css_classes(["chain-arrow"])
-                        .margin_start(2)
-                        .margin_end(2)
-                        .build();
-                    self.chain_box.append(&arrow);
-                }
+                let gap = Gap::new(!gaps.is_empty());
+                self.chain_box.append(&gap.root);
+                gaps.push(gap);
                 self.chain_box.append(&card.root);
             }
             cards.push(card);
         }
+        let end = Gap::new(false);
+        self.chain_box.append(&end.root);
+        gaps.push(end);
         *self.cards.borrow_mut() = cards;
+        *self.gaps.borrow_mut() = gaps;
+        self.drop_gap.set(None);
     }
 
     fn make_card(self: &Rc<Self>, spec: &'static BlockSpec) -> Card {
@@ -1613,6 +1780,7 @@ impl Ui {
             switch
         });
         let (menu, actions) = if blocks::is_movable(spec) {
+            self.connect_card_drag(spec, &root);
             let (menu, actions) = self.card_menu(spec, &root);
             footer.set_end_widget(Some(&menu));
             (Some(menu), Some(actions))
@@ -1754,6 +1922,10 @@ impl Ui {
         self.params_holder.set_child(Some(&view.root));
         *self.params.borrow_mut() = Some(view);
     }
+}
+
+fn round_to_i32(value: f64) -> i32 {
+    format!("{value:.0}").parse().unwrap_or_default()
 }
 
 fn hex(bytes: &[u8]) -> String {
