@@ -57,6 +57,13 @@ impl Category {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Subs {
+    Shared,
+    Typed,
+    Slot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BlockSpec {
     pub key: &'static str,
     pub title: &'static str,
@@ -65,7 +72,7 @@ pub struct BlockSpec {
     pub type_param: Option<&'static str>,
     pub select_param: Option<&'static str>,
     pub param_blocks: &'static [&'static str],
-    pub typed_subs: bool,
+    pub subs: Subs,
     pub icon: &'static str,
     pub category: Category,
     pub passive: bool,
@@ -89,7 +96,7 @@ const fn block(
         type_param,
         select_param,
         param_blocks,
-        typed_subs: false,
+        subs: Subs::Shared,
         icon: "katana-fx-symbolic",
         category: Category::Other,
         passive: false,
@@ -122,7 +129,14 @@ const fn mini(spec: BlockSpec) -> BlockSpec {
 
 const fn typed(spec: BlockSpec) -> BlockSpec {
     BlockSpec {
-        typed_subs: true,
+        subs: Subs::Typed,
+        ..spec
+    }
+}
+
+const fn slotted(spec: BlockSpec) -> BlockSpec {
+    BlockSpec {
+        subs: Subs::Slot,
         ..spec
     }
 }
@@ -295,15 +309,15 @@ pub static BLOCKS: [BlockSpec; 16] = [
         Category::Other,
     ),
     look(
-        block(
+        slotted(block(
             "contour",
             "Contour",
             None,
             Some("contour_off_on"),
-            None,
+            Some("contour_contour_select"),
             None,
             &["contour"],
-        ),
+        )),
         "katana-contour-symbolic",
         Category::Other,
     ),
@@ -475,10 +489,15 @@ pub fn block_params(
     image: &PatchImage,
     spec: &BlockSpec,
 ) -> Vec<&'static Param> {
-    let sub = if spec.typed_subs {
-        type_value(table, image, spec).and_then(|value| table.sub_for_type(value))
-    } else {
-        None
+    let filtered = spec.subs != Subs::Shared;
+    let sub = match spec.subs {
+        Subs::Shared => None,
+        Subs::Typed => type_value(table, image, spec)
+            .and_then(|value| table.sub_for_type(value))
+            .map(str::to_owned),
+        Subs::Slot => {
+            type_value(table, image, spec).map(|value| (u32::from(value) + 1).to_string())
+        }
     };
     table
         .iter()
@@ -488,6 +507,6 @@ pub fn block_params(
             let id = Some(param.id());
             id != spec.on_param && id != spec.type_param && id != spec.select_param
         })
-        .filter(|param| !spec.typed_subs || param.sub().is_none() || param.sub() == sub)
+        .filter(|param| !filtered || param.sub().is_none() || param.sub() == sub.as_deref())
         .collect()
 }

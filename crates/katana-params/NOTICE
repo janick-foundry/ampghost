@@ -25,8 +25,11 @@ table would have to be replaced with independently researched data.
 Changes made to the derived data
 --------------------------------
 
-* Addresses, sizes, ranges and labels were converted into a flat JSON table (699 parameters).
+* Addresses, sizes, ranges and labels were converted into a flat JSON table (704 parameters).
 * patch_size corrected from 3912 to 1992 (RQ1 size 00 00 0F 48, as measured on the amp).
 * The variant_select_values table was removed; type/variant linkage lives in katana-protocol.
+* Contour Freq Shift was moved from the unused byte 06 1A to the per-contour slots 0F 31, 0F 39
+  and 0F 41, and Contour Shape (0F 30, 0F 38, 0F 40) was added, matching the FxFloorBoard UI
+  (stompbox_cab.cpp). Contour Select options are labelled Contour 1 to Contour 3.
 * Each entry is tagged "research" ([R], taken from FxFloorBoard) unless it was verified on a real
   Katana 50 MK II ([V], with the verification date).
