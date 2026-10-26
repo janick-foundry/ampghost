@@ -1761,17 +1761,6 @@ impl Ui {
             None => tr("Katana Control"),
         };
         self.title.set_title(&title);
-        let status = match &model.device {
-            None => tr("Not connected"),
-            Some(device) if device.is_supported() => {
-                trf("{model} connected", &[("model", &device.model_name())])
-            }
-            Some(device) => trf(
-                "{model} connected, read-only",
-                &[("model", &device.model_name())],
-            ),
-        };
-        self.title.set_subtitle(&status);
         let profile = model.device.as_ref().and_then(|device| device.profile);
         for (channel, button) in &self.channel_buttons {
             let active = model.channel == Some(*channel);
@@ -2386,7 +2375,7 @@ fn build_sidebar_header() -> (adw::HeaderBar, gtk::ToggleButton) {
 }
 
 fn build_header() -> Header {
-    let title = adw::WindowTitle::new(&tr("Katana Control"), &tr("Not connected"));
+    let title = adw::WindowTitle::new(&tr("Katana Control"), "");
     let header = adw::HeaderBar::new();
     header.set_title_widget(Some(&title));
     let sidebar_button = sidebar_toggle();
