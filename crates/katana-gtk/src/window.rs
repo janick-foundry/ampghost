@@ -179,7 +179,7 @@ pub struct Ui {
     window: adw::ApplicationWindow,
     toasts: adw::ToastOverlay,
     title: adw::WindowTitle,
-    status_box: gtk::Box,
+    status_active: Rc<Cell<bool>>,
     status_label: gtk::Label,
     light: gtk::Box,
     channel_buttons: Vec<(Channel, gtk::Button)>,
@@ -205,7 +205,7 @@ pub struct Ui {
     pending: RefCell<BTreeMap<&'static str, u16>>,
     write_timers: RefCell<BTreeMap<&'static str, glib::SourceId>>,
     in_flight: RefCell<BTreeMap<&'static str, u16>>,
-    status_serial: Cell<u64>,
+    status_serial: Rc<Cell<u64>>,
     closing: Cell<bool>,
     cards: RefCell<Vec<Card>>,
     chain_keys: RefCell<Vec<&'static str>>,
@@ -659,7 +659,7 @@ fn section_heading(text: &str) -> gtk::Label {
 
 impl Ui {
     fn build(app: &adw::Application, table: &'static ParamTable, engine: EngineHandle) -> Rc<Self> {
-        let (header, title, status_box, status_label, light, content_toggle) = build_header();
+        let (header, title, status_label, light, content_toggle) = build_header();
         let (channel_section, channel_buttons) = build_channels();
         let (sidebar, preset_search, preset_list) = build_sidebar();
         let (chain, chain_box, output, extras_box) = build_blocks_row();
@@ -697,7 +697,7 @@ impl Ui {
             window,
             toasts,
             title,
-            status_box,
+            status_active: Rc::new(Cell::new(false)),
             status_label,
             light,
             channel_buttons,
@@ -726,7 +726,7 @@ impl Ui {
             pending: RefCell::new(BTreeMap::new()),
             write_timers: RefCell::new(BTreeMap::new()),
             in_flight: RefCell::new(BTreeMap::new()),
-            status_serial: Cell::new(0),
+            status_serial: Rc::new(Cell::new(0)),
             closing: Cell::new(false),
             cards: RefCell::new(Vec::new()),
             chain_keys: RefCell::new(Vec::new()),
@@ -996,28 +996,32 @@ impl Ui {
         if !job.shows_status() {
             return;
         }
-        self.status_label.set_text(&job.status_text());
+        let text = job.status_text();
         let serial = self.status_serial.get().wrapping_add(1);
         self.status_serial.set(serial);
-        let weak = self.window.downgrade();
-        let status_box = self.status_box.clone();
-        let current = self.status_serial.clone();
+        let label = self.status_label.downgrade();
+        let current = Rc::clone(&self.status_serial);
+        let active = Rc::clone(&self.status_active);
         glib::timeout_add_local_once(STATUS_DELAY, move || {
-            if weak.upgrade().is_some() && current.get() == serial {
-                status_box.set_visible(true);
+            if let Some(label) = label.upgrade()
+                && current.get() == serial
+            {
+                active.set(true);
+                label.set_text(&text);
             }
         });
     }
 
     fn show_status_now(&self, text: &str) {
+        self.status_active.set(true);
         self.status_label.set_text(text);
-        self.status_box.set_visible(true);
     }
 
     fn end_status(&self) {
         self.status_serial
             .set(self.status_serial.get().wrapping_add(1));
-        self.status_box.set_visible(false);
+        self.status_active.set(false);
+        self.refresh_light();
     }
 
     fn show_stage(&self, stage: Stage) {
@@ -1043,7 +1047,7 @@ impl Ui {
             Stage::ReadingTemp => tr("Reading from Katana…"),
         };
         tracing::info!(?stage, "progress");
-        self.status_label.set_text(&text);
+        self.show_status_now(&text);
     }
 
     fn handle_event(self: &Rc<Self>, event: Event) {
@@ -1821,24 +1825,15 @@ impl Ui {
         let (class, text) = match &model.device {
             None if connecting => ("conn-busy", tr("Looking for Katana…")),
             None => ("conn-off", tr("Not connected")),
-            Some(device) if busy => (
-                "conn-busy",
-                trf(
-                    "{model}: talking to the amp…",
-                    &[("model", &device.model_name())],
-                ),
-            ),
-            Some(device) if device.is_supported() => (
-                "conn-ok",
-                trf("{model} connected", &[("model", &device.model_name())]),
-            ),
-            Some(device) => (
-                "conn-ok",
-                trf(
-                    "{model} connected, read-only",
-                    &[("model", &device.model_name())],
-                ),
-            ),
+            Some(device) => {
+                let name = device.model_name();
+                let text = if device.is_supported() {
+                    trf("{model} connected", &[("model", &name)])
+                } else {
+                    trf("{model} connected, read-only", &[("model", &name)])
+                };
+                (if busy { "conn-busy" } else { "conn-ok" }, text)
+            }
         };
         for name in ["conn-ok", "conn-busy", "conn-off"] {
             if name == class {
@@ -1847,9 +1842,16 @@ impl Ui {
                 self.light.remove_css_class(name);
             }
         }
-        self.light.set_tooltip_text(Some(&text));
+        let state = match class {
+            "conn-ok" => tr("Connected"),
+            "conn-busy" => tr("Busy"),
+            _ => tr("Disconnected"),
+        };
         self.light
-            .update_property(&[gtk::accessible::Property::Label(&text)]);
+            .update_property(&[gtk::accessible::Property::Label(&state)]);
+        if !self.status_active.get() {
+            self.status_label.set_text(&text);
+        }
     }
 
     fn refresh_card_actions(&self) {
@@ -2312,7 +2314,6 @@ fn writable(model: &Model) -> bool {
 type Header = (
     adw::HeaderBar,
     adw::WindowTitle,
-    gtk::Box,
     gtk::Label,
     gtk::Box,
     gtk::ToggleButton,
@@ -2391,33 +2392,26 @@ fn build_header() -> Header {
         .css_classes(["conn-light", "conn-off"])
         .valign(gtk::Align::Center)
         .halign(gtk::Align::Center)
-        .margin_start(6)
-        .margin_end(6)
         .accessible_role(gtk::AccessibleRole::Img)
         .build();
-    header.pack_end(&light);
     let status_label = gtk::Label::builder()
-        .css_classes(["dim-label", "status-label"])
+        .label(tr("Not connected"))
+        .css_classes(["caption", "dim-label", "status-label"])
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .max_width_chars(36)
+        .valign(gtk::Align::Center)
         .build();
     let status_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(8)
-        .visible(false)
+        .margin_end(6)
+        .valign(gtk::Align::Center)
         .build();
-    status_box.append(&adw::Spinner::new());
+    status_box.append(&light);
     status_box.append(&status_label);
     header.pack_end(&status_box);
 
-    (
-        header,
-        title,
-        status_box,
-        status_label,
-        light,
-        sidebar_button,
-    )
+    (header, title, status_label, light, sidebar_button)
 }
 
 fn build_channels() -> (adw::Clamp, Vec<(Channel, gtk::Button)>) {
