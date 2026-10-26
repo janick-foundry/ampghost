@@ -23,6 +23,7 @@ use crate::params_view::{self, Edit, OnChange, ParamsView, Structure};
 const EVENT_PUMP: Duration = Duration::from_millis(30);
 const CONTINUOUS_WRITE_DEBOUNCE: Duration = Duration::from_millis(500);
 const STATUS_DELAY: Duration = Duration::from_millis(300);
+const TOGGLE_FADE: u32 = 250;
 
 type Handler = Box<dyn Fn(&Rc<Ui>)>;
 type MoveTarget = Rc<dyn Fn(&Ui) -> Option<&'static str>>;
@@ -2316,7 +2317,7 @@ type Header = (
     adw::WindowTitle,
     gtk::Label,
     gtk::Box,
-    gtk::ToggleButton,
+    gtk::Revealer,
 );
 
 fn sidebar_toggle() -> gtk::ToggleButton {
@@ -2331,7 +2332,7 @@ fn build_split(
     sidebar: &gtk::Box,
     header: &adw::HeaderBar,
     stack: &gtk::Stack,
-    content_toggle: &gtk::ToggleButton,
+    content_toggle: &gtk::Revealer,
 ) -> adw::OverlaySplitView {
     let (sidebar_header, sidebar_toggle) = build_sidebar_header();
     let sidebar_pane = adw::ToolbarView::new();
@@ -2345,7 +2346,13 @@ fn build_split(
         .content(&content_pane)
         .min_sidebar_width(240.0)
         .build();
-    for toggle in [&sidebar_toggle, content_toggle] {
+    let toggles = [
+        Some(sidebar_toggle),
+        content_toggle
+            .child()
+            .and_then(|child| child.downcast::<gtk::ToggleButton>().ok()),
+    ];
+    for toggle in toggles.iter().flatten() {
         toggle
             .bind_property("active", &split, "show-sidebar")
             .bidirectional()
@@ -2353,7 +2360,7 @@ fn build_split(
             .build();
     }
     split
-        .bind_property("show-sidebar", content_toggle, "visible")
+        .bind_property("show-sidebar", content_toggle, "reveal-child")
         .invert_boolean()
         .sync_create()
         .build();
@@ -2380,7 +2387,12 @@ fn build_header() -> Header {
     let header = adw::HeaderBar::new();
     header.set_title_widget(Some(&title));
     let sidebar_button = sidebar_toggle();
-    header.pack_start(&sidebar_button);
+    let reveal = gtk::Revealer::builder()
+        .transition_type(gtk::RevealerTransitionType::Crossfade)
+        .transition_duration(TOGGLE_FADE)
+        .child(&sidebar_button)
+        .build();
+    header.pack_start(&reveal);
     let menu_button = gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
         .menu_model(&main_menu())
@@ -2411,7 +2423,7 @@ fn build_header() -> Header {
     status_box.append(&status_label);
     header.pack_end(&status_box);
 
-    (header, title, status_label, light, sidebar_button)
+    (header, title, status_label, light, reveal)
 }
 
 fn build_channels() -> (adw::Clamp, Vec<(Channel, gtk::Button)>) {
