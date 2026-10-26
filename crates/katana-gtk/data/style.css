@@ -258,3 +258,26 @@
 .conn-off {
   background-color: var(--error-color);
 }
+
+.navigation-sidebar.preset-list > row.preset-row {
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+}
+
+.navigation-sidebar.preset-list > row.preset-row > box.header {
+  margin-left: 9px;
+  margin-right: 0;
+}
+
+.preset-apply {
+  opacity: 0.45;
+  transition: opacity 150ms ease, background-color 150ms ease;
+}
+
+row.preset-row:hover .preset-apply,
+.preset-apply:hover,
+.preset-apply:focus-visible,
+.preset-apply:active {
+  opacity: 1;
+}

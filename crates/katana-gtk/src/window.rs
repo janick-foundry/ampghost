@@ -1907,7 +1907,20 @@ impl Ui {
                 .action_target(&entry.key.to_variant())
                 .tooltip_text(tr("Apply to temp and verify"))
                 .build();
-            row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+            row.add_css_class("preset-row");
+            let apply = gtk::Button::builder()
+                .icon_name("katana-upload-symbolic")
+                .valign(gtk::Align::Center)
+                .css_classes(["flat", "preset-apply"])
+                .action_name("win.apply-preset")
+                .action_target(&entry.key.to_variant())
+                .tooltip_text(tr("Apply to temp and verify"))
+                .build();
+            apply.set_cursor_from_name(Some("pointer"));
+            apply.update_property(&[gtk::accessible::Property::Label(&tr(
+                "Apply to temp and verify",
+            ))]);
+            row.add_suffix(&apply);
             self.preset_list.append(&row);
         }
     }
@@ -2472,7 +2485,7 @@ fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
         .placeholder_text(tr("Search Presets"))
         .build();
     let preset_list = gtk::ListBox::builder()
-        .css_classes(["navigation-sidebar"])
+        .css_classes(["navigation-sidebar", "preset-list"])
         .selection_mode(gtk::SelectionMode::None)
         .build();
     preset_list.set_placeholder(Some(
