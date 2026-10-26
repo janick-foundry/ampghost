@@ -572,6 +572,18 @@ fn move_menu(prefix: &str) -> gio::Menu {
     model
 }
 
+fn refresh_node_state(card: &Card, selected: bool, can_edit: bool) {
+    if card.actions.is_some() && !card.root.has_css_class("dragging") {
+        let cursor = if can_edit { "grab" } else { "pointer" };
+        card.root.set_cursor_from_name(Some(cursor));
+    }
+    if selected {
+        card.root.add_css_class("selected");
+    } else {
+        card.root.remove_css_class("selected");
+    }
+}
+
 fn mini_node(spec: &'static BlockSpec) -> gtk::Box {
     let title = tr(spec.title);
     let icon = gtk::Image::builder()
@@ -931,7 +943,7 @@ impl Ui {
         source.connect_drag_end(move |_, _, _| {
             if let Some(root) = end_root.upgrade() {
                 root.remove_css_class("dragging");
-                root.set_cursor(None);
+                root.set_cursor_from_name(Some("grab"));
             }
             if let Some(ui) = end_ui.upgrade() {
                 ui.dragging.set(None);
@@ -1927,11 +1939,7 @@ impl Ui {
                 card.root
                     .update_property(&[gtk::accessible::Property::Description(&text)]);
             }
-            if card.key == model.selected {
-                card.root.add_css_class("selected");
-            } else {
-                card.root.remove_css_class("selected");
-            }
+            refresh_node_state(card, card.key == model.selected, can_edit);
             let on = blocks::is_on(self.table, image, spec);
             if on == Some(false) {
                 card.root.add_css_class("block-off");
@@ -2066,6 +2074,7 @@ impl Ui {
         if let Some(class) = spec.category.css_class() {
             root.add_css_class(class);
         }
+        root.set_cursor_from_name(Some("pointer"));
         root.update_property(&[gtk::accessible::Property::Label(&title)]);
         let dot = gtk::Box::builder()
             .css_classes(["node-variant", "variant-none"])
@@ -2121,6 +2130,7 @@ impl Ui {
             "Enable {block}",
             &[("block", &tr(spec.title))],
         ))]);
+        toggle.set_cursor_from_name(Some("pointer"));
         let weak = Rc::downgrade(self);
         toggle.connect_toggled(move |toggle| {
             if let Some(ui) = weak.upgrade()
@@ -2137,6 +2147,16 @@ impl Ui {
         let click = gtk::GestureClick::builder()
             .button(gtk::gdk::BUTTON_PRIMARY)
             .build();
+        click.connect_pressed(|gesture, _, _, _| {
+            if let Some(widget) = gesture.widget() {
+                widget.set_state_flags(gtk::StateFlags::ACTIVE, false);
+            }
+        });
+        click.connect_end(|gesture, _| {
+            if let Some(widget) = gesture.widget() {
+                widget.unset_state_flags(gtk::StateFlags::ACTIVE);
+            }
+        });
         let click_ui = Rc::downgrade(self);
         let click_root = root.downgrade();
         click.connect_released(move |gesture, _, _, _| {
