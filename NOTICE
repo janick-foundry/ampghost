@@ -12,5 +12,10 @@ Parameter maps in crates/katana-params/data/params.json are derived from Katana 
 by Colin Willcocks (gumtown), which is distributed under the GNU General Public License.
 Full attribution, source location and checksums are in crates/katana-params/NOTICE.
 
+Interface icons in crates/katana-gtk/data/icons/hicolor/symbolic/actions are converted from Lucide
+(ISC licence, with icons derived from Feather under the MIT licence) and Phosphor Icons core
+(MIT licence); see crates/katana-gtk/data/icons/LICENSE-lucide and LICENSE-phosphor. The Pedal FX
+icon is original to this project and drawn in the Lucide style.
+
 BOSS and KATANA are trademarks of Roland Corporation. This project is not affiliated with or
 endorsed by Roland Corporation.
