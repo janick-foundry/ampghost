@@ -2,52 +2,128 @@
   padding: 12px;
 }
 
-.chain-block {
+.chain-node {
   padding: 0;
-  min-width: 104px;
+  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
 }
 
-.chain-head {
-  padding: 8px 10px 4px 12px;
-  min-height: 26px;
+.chain-node:hover {
+  background-color: color-mix(in srgb, currentColor 5%, var(--card-bg-color));
 }
 
-.chain-select {
-  border-radius: 0;
-  margin: 0;
-  padding: 6px 12px 10px;
+.chain-node:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 50%, transparent);
+  outline-offset: -2px;
 }
 
-.chain-block.selected {
-  background-color: color-mix(in srgb, var(--accent-bg-color) 14%, var(--card-bg-color));
+.chain-node.cat-drive {
+  background-color: color-mix(in srgb, var(--orange-3) 8%, var(--card-bg-color));
 }
 
-.chain-block.selected .chain-select {
-  background-color: color-mix(in srgb, var(--accent-bg-color) 10%, transparent);
+.chain-node.cat-modulation {
+  background-color: color-mix(in srgb, var(--purple-3) 8%, var(--card-bg-color));
 }
 
-.chain-block.selected .chain-select:hover {
-  background-color: color-mix(in srgb, var(--accent-bg-color) 16%, transparent);
+.chain-node.cat-amp {
+  background-color: color-mix(in srgb, var(--blue-3) 8%, var(--card-bg-color));
+}
+
+.chain-node.cat-ambient {
+  background-color: color-mix(in srgb, var(--green-3) 8%, var(--card-bg-color));
+}
+
+.chain-node.selected,
+.chain-node.selected:hover {
+  background-color: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+}
+
+.chain-node.selected:focus-visible {
+  outline-color: color-mix(in srgb, var(--accent-fg-color) 60%, transparent);
+}
+
+.node-title {
+  font-weight: bold;
+}
+
+.chain-node.block-off .node-icon,
+.chain-node.block-off .node-title,
+.chain-node.block-off .block-type {
+  opacity: 0.45;
+}
+
+.node-power {
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+}
+
+.node-power:checked {
+  background-color: transparent;
+}
+
+.node-power:checked:hover {
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.node-power-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 6px;
+  border: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.node-power:checked .node-power-dot {
+  background-color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+.chain-node.selected .node-power-dot {
+  border-color: color-mix(in srgb, var(--accent-fg-color) 60%, transparent);
+}
+
+.chain-node.selected .node-power:checked .node-power-dot {
+  background-color: var(--accent-fg-color);
+  border-color: var(--accent-fg-color);
+}
+
+.node-variant {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 4px;
+}
+
+.chain-node.selected .node-variant {
+  box-shadow: 0 0 0 1px var(--accent-fg-color);
+}
+
+.chain-mini {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 14px;
+  background-color: color-mix(in srgb, currentColor 8%, transparent);
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+
+.chain-node.dragging {
+  opacity: 0.35;
+}
+
+.drop-indicator {
+  min-width: 4px;
+  margin: 6px 0;
+  border-radius: 2px;
+  background-color: var(--accent-bg-color);
 }
 
 .detail-sheet {
   background-color: var(--window-bg-color);
   background-image: linear-gradient(var(--card-bg-color), var(--card-bg-color));
-  box-shadow: 0 6px 20px rgb(0 0 0 / 14%), 0 1px 4px rgb(0 0 0 / 8%), 0 0 0 1px rgb(0 0 0 / 5%);
 }
 
 .detail-head {
-  padding: 18px 12px 6px 24px;
-}
-
-.chain-block.selected {
-  outline: 2px solid var(--accent-color);
-  outline-offset: -2px;
-}
-
-.chain-block.block-off .block-title,
-.chain-block.block-off .block-type {
-  opacity: 0.55;
+  padding: 14px 12px 10px 18px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent);
 }
 
 .variant-dot {
@@ -88,38 +164,6 @@
   min-width: 44px;
   min-height: 36px;
   font-weight: bold;
-}
-
-.chain-grab {
-  padding: 7px 6px;
-  border-top: 1px solid alpha(currentColor, 0.08);
-  transition: background-color 150ms ease;
-}
-
-.chain-grab:hover {
-  background-color: alpha(currentColor, 0.06);
-}
-
-.chain-grip {
-  opacity: 0.5;
-  -gtk-icon-transform: rotate(90deg);
-}
-
-.chain-more {
-  min-width: 24px;
-  min-height: 24px;
-  padding: 0;
-}
-
-.chain-block.dragging {
-  opacity: 0.35;
-}
-
-.drop-indicator {
-  min-width: 4px;
-  margin: 6px 0;
-  border-radius: 2px;
-  background-color: var(--accent-bg-color);
 }
 
 .detail-list {

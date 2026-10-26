@@ -5,6 +5,8 @@ use katana_protocol::Channel;
 
 use crate::i18n::{tr, trf};
 
+const LUCIDE_LICENSE: &str = include_str!("../data/icons/LICENSE-lucide");
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwitchChoice {
     Switch,
@@ -141,11 +143,30 @@ pub fn about(parent: &impl IsA<gtk::Widget>) {
         Some(&tr("Parameter Maps")),
         &["Colin Willcocks (Katana Mk2 FxFloorBoard)"],
     );
+    dialog.add_credit_section(
+        Some(&tr("Icons")),
+        &[
+            "Lucide https://lucide.dev",
+            "Phosphor Icons https://phosphoricons.com",
+        ],
+    );
     dialog.add_legal_section(
         "Katana Mk2 FxFloorBoard",
         None,
         gtk::License::Custom,
         Some(SOURCE_ATTRIBUTION),
+    );
+    dialog.add_legal_section(
+        "Lucide",
+        Some("© Lucide Icons and Contributors, © Cole Bemis (Feather)"),
+        gtk::License::Custom,
+        Some(LUCIDE_LICENSE),
+    );
+    dialog.add_legal_section(
+        "Phosphor Icons",
+        Some("© 2023 Phosphor Icons"),
+        gtk::License::MitX11,
+        None,
     );
     dialog.present(Some(parent));
 }

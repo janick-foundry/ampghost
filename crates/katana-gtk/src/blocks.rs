@@ -36,6 +36,27 @@ impl Variant {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Category {
+    Drive,
+    Modulation,
+    Amp,
+    Ambient,
+    Other,
+}
+
+impl Category {
+    pub fn css_class(self) -> Option<&'static str> {
+        match self {
+            Self::Drive => Some("cat-drive"),
+            Self::Modulation => Some("cat-modulation"),
+            Self::Amp => Some("cat-amp"),
+            Self::Ambient => Some("cat-ambient"),
+            Self::Other => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BlockSpec {
     pub key: &'static str,
     pub title: &'static str,
@@ -45,6 +66,10 @@ pub struct BlockSpec {
     pub select_param: Option<&'static str>,
     pub param_blocks: &'static [&'static str],
     pub typed_subs: bool,
+    pub icon: &'static str,
+    pub category: Category,
+    pub passive: bool,
+    pub mini: bool,
 }
 
 const fn block(
@@ -65,6 +90,33 @@ const fn block(
         select_param,
         param_blocks,
         typed_subs: false,
+        icon: "katana-fx-symbolic",
+        category: Category::Other,
+        passive: false,
+        mini: false,
+    }
+}
+
+const fn look(spec: BlockSpec, icon: &'static str, category: Category) -> BlockSpec {
+    BlockSpec {
+        icon,
+        category,
+        ..spec
+    }
+}
+
+const fn passive(spec: BlockSpec) -> BlockSpec {
+    BlockSpec {
+        passive: true,
+        ..spec
+    }
+}
+
+const fn mini(spec: BlockSpec) -> BlockSpec {
+    BlockSpec {
+        passive: true,
+        mini: true,
+        ..spec
     }
 }
 
@@ -75,125 +127,191 @@ const fn typed(spec: BlockSpec) -> BlockSpec {
     }
 }
 
-pub static BLOCKS: [BlockSpec; 14] = [
-    block(
-        "booster",
-        "Booster",
-        Some("OD"),
-        Some("booster_on_off"),
-        Some("booster_type"),
-        Some("select_booster"),
-        &["booster"],
+pub static BLOCKS: [BlockSpec; 16] = [
+    look(
+        block(
+            "booster",
+            "Booster",
+            Some("OD"),
+            Some("booster_on_off"),
+            Some("booster_type"),
+            Some("select_booster"),
+            &["booster"],
+        ),
+        "katana-booster-symbolic",
+        Category::Drive,
     ),
-    typed(block(
-        "mod",
-        "Mod",
-        Some("FX1"),
-        Some("mod_on_off"),
-        Some("mod_type"),
-        Some("select_mod"),
-        &["mod"],
+    look(
+        typed(block(
+            "mod",
+            "Mod",
+            Some("FX1"),
+            Some("mod_on_off"),
+            Some("mod_type"),
+            Some("select_mod"),
+            &["mod"],
+        )),
+        "katana-mod-symbolic",
+        Category::Modulation,
+    ),
+    look(
+        block(
+            "amp",
+            "Amp",
+            Some("CH_A"),
+            None,
+            Some("amp_type"),
+            None,
+            &["amp"],
+        ),
+        "katana-amp-symbolic",
+        Category::Amp,
+    ),
+    look(
+        block(
+            "eq1",
+            "EQ",
+            Some("EQ1"),
+            Some("eq1_on_off"),
+            Some("eq1_selection"),
+            None,
+            &["eq1"],
+        ),
+        "katana-eq-symbolic",
+        Category::Amp,
+    ),
+    look(
+        block(
+            "eq2",
+            "EQ 2",
+            Some("EQ2"),
+            Some("eq2_on_off"),
+            Some("eq2_selection"),
+            None,
+            &["eq2"],
+        ),
+        "katana-eq-symbolic",
+        Category::Amp,
+    ),
+    look(
+        typed(block(
+            "fx",
+            "FX",
+            Some("FX2"),
+            Some("fx_on_off"),
+            Some("fx_type"),
+            Some("select_fx"),
+            &["fx"],
+        )),
+        "katana-fx-symbolic",
+        Category::Modulation,
+    ),
+    look(
+        block(
+            "delay1",
+            "Delay",
+            Some("DD1"),
+            Some("delay1_on_off"),
+            Some("delay1_type"),
+            Some("select_delay1"),
+            &["delay1"],
+        ),
+        "katana-delay-symbolic",
+        Category::Ambient,
+    ),
+    look(
+        block(
+            "delay2",
+            "Delay 2",
+            Some("DD2"),
+            Some("delay2_on_off"),
+            Some("delay2_type"),
+            Some("select_reverb"),
+            &["delay2"],
+        ),
+        "katana-delay2-symbolic",
+        Category::Ambient,
+    ),
+    look(
+        block(
+            "reverb",
+            "Reverb",
+            Some("RV"),
+            Some("reverb_on_off"),
+            Some("reverb_type"),
+            Some("select_reverb"),
+            &["reverb"],
+        ),
+        "katana-reverb-symbolic",
+        Category::Ambient,
+    ),
+    look(
+        block(
+            "send_return",
+            "Send/Return",
+            Some("LP"),
+            Some("send_return_on_off"),
+            None,
+            None,
+            &["send_return"],
+        ),
+        "katana-send-return-symbolic",
+        Category::Other,
+    ),
+    look(
+        block(
+            "noise_gate",
+            "Noise Gate",
+            Some("NS_1"),
+            Some("noise_gate_on_off"),
+            None,
+            None,
+            &["noise_gate"],
+        ),
+        "katana-gate-symbolic",
+        Category::Amp,
+    ),
+    passive(look(
+        block("pedal_fx", "Pedal FX", Some("PDL"), None, None, None, &[]),
+        "katana-pedal-fx-symbolic",
+        Category::Other,
     )),
-    block(
-        "amp",
-        "Amp",
-        Some("CH_A"),
-        None,
-        Some("amp_type"),
-        None,
-        &["amp"],
-    ),
-    block(
-        "eq1",
-        "EQ",
-        Some("EQ1"),
-        Some("eq1_on_off"),
-        Some("eq1_selection"),
-        None,
-        &["eq1"],
-    ),
-    block(
-        "eq2",
-        "EQ 2",
-        Some("EQ2"),
-        Some("eq2_on_off"),
-        Some("eq2_selection"),
-        None,
-        &["eq2"],
-    ),
-    typed(block(
-        "fx",
-        "FX",
-        Some("FX2"),
-        Some("fx_on_off"),
-        Some("fx_type"),
-        Some("select_fx"),
-        &["fx"],
+    mini(look(
+        block("cab", "Cabinet", Some("CAB"), None, None, None, &[]),
+        "katana-cab-symbolic",
+        Category::Other,
     )),
-    block(
-        "delay1",
-        "Delay",
-        Some("DD1"),
-        Some("delay1_on_off"),
-        Some("delay1_type"),
-        Some("select_delay1"),
-        &["delay1"],
+    look(
+        block(
+            "solo",
+            "Solo",
+            None,
+            Some("solo_on_off"),
+            None,
+            None,
+            &["solo"],
+        ),
+        "katana-solo-symbolic",
+        Category::Other,
     ),
-    block(
-        "delay2",
-        "Delay 2",
-        Some("DD2"),
-        Some("delay2_on_off"),
-        Some("delay2_type"),
-        Some("select_reverb"),
-        &["delay2"],
+    look(
+        block(
+            "contour",
+            "Contour",
+            None,
+            Some("contour_off_on"),
+            None,
+            None,
+            &["contour"],
+        ),
+        "katana-contour-symbolic",
+        Category::Other,
     ),
-    block(
-        "reverb",
-        "Reverb",
-        Some("RV"),
-        Some("reverb_on_off"),
-        Some("reverb_type"),
-        Some("select_reverb"),
-        &["reverb"],
+    look(
+        block("patch", "Patch", None, None, None, None, &["master", "cab"]),
+        "katana-patch-symbolic",
+        Category::Other,
     ),
-    block(
-        "send_return",
-        "Send/Return",
-        Some("LP"),
-        Some("send_return_on_off"),
-        None,
-        None,
-        &["send_return"],
-    ),
-    block(
-        "noise_gate",
-        "Noise Gate",
-        Some("NS_1"),
-        Some("noise_gate_on_off"),
-        None,
-        None,
-        &["noise_gate"],
-    ),
-    block(
-        "solo",
-        "Solo",
-        None,
-        Some("solo_on_off"),
-        None,
-        None,
-        &["solo"],
-    ),
-    block(
-        "contour",
-        "Contour",
-        None,
-        Some("contour_off_on"),
-        None,
-        None,
-        &["contour"],
-    ),
-    block("patch", "Patch", None, None, None, None, &["master", "cab"]),
 ];
 
 pub fn spec(key: &str) -> Option<&'static BlockSpec> {
@@ -228,8 +346,12 @@ fn spec_for_code(table: &ParamTable, code: u8) -> Option<&'static BlockSpec> {
         .find(|spec| spec.chain_label == Some(label.as_str()))
 }
 
+pub fn reorderable(spec: &BlockSpec) -> bool {
+    spec.chain_label.is_some() && !spec.passive
+}
+
 pub fn is_movable(spec: &BlockSpec) -> bool {
-    spec.chain_label.is_some() && spec.key != ANCHOR
+    reorderable(spec) && spec.key != ANCHOR
 }
 
 pub fn chain_codes(table: &ParamTable, image: &PatchImage) -> Option<Vec<u8>> {
@@ -268,7 +390,7 @@ pub fn reorder(
     let mut slots = Vec::new();
     let mut visible = Vec::new();
     for (slot, &code) in codes.iter().enumerate() {
-        if let Some(spec) = spec_for_code(table, code) {
+        if let Some(spec) = spec_for_code(table, code).filter(|spec| reorderable(spec)) {
             slots.push(slot);
             visible.push((spec.key, code));
         }

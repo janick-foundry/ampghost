@@ -4,5 +4,20 @@
     <file>style.css</file>
     <file alias="icons/scalable/apps/io.github.janfoundry.KatanaControl.svg">icons/hicolor/scalable/apps/io.github.janfoundry.KatanaControl.svg</file>
     <file alias="icons/symbolic/apps/io.github.janfoundry.KatanaControl-symbolic.svg">icons/hicolor/symbolic/apps/io.github.janfoundry.KatanaControl-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-amp-symbolic.svg">icons/hicolor/symbolic/actions/katana-amp-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-booster-symbolic.svg">icons/hicolor/symbolic/actions/katana-booster-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-cab-symbolic.svg">icons/hicolor/symbolic/actions/katana-cab-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-contour-symbolic.svg">icons/hicolor/symbolic/actions/katana-contour-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-delay-symbolic.svg">icons/hicolor/symbolic/actions/katana-delay-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-delay2-symbolic.svg">icons/hicolor/symbolic/actions/katana-delay2-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-eq-symbolic.svg">icons/hicolor/symbolic/actions/katana-eq-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-fx-symbolic.svg">icons/hicolor/symbolic/actions/katana-fx-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-gate-symbolic.svg">icons/hicolor/symbolic/actions/katana-gate-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-mod-symbolic.svg">icons/hicolor/symbolic/actions/katana-mod-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-patch-symbolic.svg">icons/hicolor/symbolic/actions/katana-patch-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-pedal-fx-symbolic.svg">icons/hicolor/symbolic/actions/katana-pedal-fx-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-reverb-symbolic.svg">icons/hicolor/symbolic/actions/katana-reverb-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-send-return-symbolic.svg">icons/hicolor/symbolic/actions/katana-send-return-symbolic.svg</file>
+    <file alias="icons/scalable/actions/katana-solo-symbolic.svg">icons/hicolor/symbolic/actions/katana-solo-symbolic.svg</file>
   </gresource>
 </gresources>
