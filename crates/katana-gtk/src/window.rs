@@ -1908,19 +1908,14 @@ impl Ui {
                 .tooltip_text(tr("Apply to temp and verify"))
                 .build();
             row.add_css_class("preset-row");
-            let apply = gtk::Button::builder()
-                .icon_name("katana-upload-symbolic")
-                .valign(gtk::Align::Center)
-                .css_classes(["flat", "preset-apply"])
-                .action_name("win.apply-preset")
-                .action_target(&entry.key.to_variant())
-                .tooltip_text(tr("Apply to temp and verify"))
-                .build();
-            apply.set_cursor_from_name(Some("pointer"));
-            apply.update_property(&[gtk::accessible::Property::Label(&tr(
-                "Apply to temp and verify",
-            ))]);
-            row.add_suffix(&apply);
+            row.add_suffix(
+                &gtk::Image::builder()
+                    .icon_name("katana-upload-symbolic")
+                    .valign(gtk::Align::Center)
+                    .css_classes(["preset-apply"])
+                    .accessible_role(gtk::AccessibleRole::Presentation)
+                    .build(),
+            );
             self.preset_list.append(&row);
         }
     }

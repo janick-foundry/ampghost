@@ -267,17 +267,15 @@
 
 .navigation-sidebar.preset-list > row.preset-row > box.header {
   margin-left: 9px;
-  margin-right: 0;
+  margin-right: 9px;
 }
 
 .preset-apply {
   opacity: 0.45;
-  transition: opacity 150ms ease, background-color 150ms ease;
+  transition: opacity 150ms ease;
 }
 
 row.preset-row:hover .preset-apply,
-.preset-apply:hover,
-.preset-apply:focus-visible,
-.preset-apply:active {
+row.preset-row:focus-visible .preset-apply {
   opacity: 1;
 }
