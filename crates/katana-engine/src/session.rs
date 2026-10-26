@@ -177,6 +177,7 @@ impl Session {
         let profile = self.profile()?;
         let request = profile.read_temp_request();
         self.drain(self.timings.pre_request_drain)?;
+        self.discard_superseded(request);
         self.transport.send(&request.encode())?;
         let deadline = self.clock.now() + self.timings.read_timeout;
         let mut assembler = PatchAssembler::new(&profile.patch_layout, profile.temp_patch);
@@ -199,6 +200,21 @@ impl Session {
                 Some(Incoming::Dt1(packet)) => self.unsolicited.push(packet),
                 Some(_) => {}
             }
+        }
+    }
+
+    fn discard_superseded(&mut self, request: Rq1) {
+        let start = request.address().linear();
+        let end = request.end();
+        let before = self.unsolicited.len();
+        self.unsolicited
+            .retain(|packet| packet.end() <= start || packet.start() >= end);
+        let discarded = before - self.unsolicited.len();
+        if discarded > 0 {
+            tracing::info!(
+                discarded,
+                "dropping temp packets superseded by a fresh read"
+            );
         }
     }
 

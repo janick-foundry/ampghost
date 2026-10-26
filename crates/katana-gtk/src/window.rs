@@ -1463,11 +1463,14 @@ impl Ui {
         let mut changed = false;
         if let Some(image) = self.model.borrow_mut().image.as_mut() {
             for (position, &value) in (start..).zip(packet.data()) {
-                changed |= image.set(PatchOffset::from_linear(position), value).is_ok();
+                let offset = PatchOffset::from_linear(position);
+                if image.get(offset).is_some_and(|current| current != value) {
+                    changed |= image.set(offset, value).is_ok();
+                }
             }
         }
         if changed && !self.is_busy() {
-            tracing::debug!(%packet, "temp changed on the amp");
+            tracing::info!(%packet, "temp changed on the amp");
             self.refresh_all();
         }
     }
