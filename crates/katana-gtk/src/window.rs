@@ -377,9 +377,12 @@ fn node_strip(heading: &str) -> (gtk::Box, gtk::Box) {
         .build();
     let wrap = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
-        .halign(gtk::Align::Start)
+        .halign(gtk::Align::Center)
         .margin_bottom(SCROLLBAR_ROOM)
         .build();
+    let title = section_heading(heading);
+    title.set_margin_start(12);
+    wrap.append(&title);
     wrap.append(&flow_arrow());
     wrap.append(&row);
     let scroller = gtk::ScrolledWindow::builder()
@@ -392,7 +395,6 @@ fn node_strip(heading: &str) -> (gtk::Box, gtk::Box) {
         .orientation(gtk::Orientation::Vertical)
         .hexpand(true)
         .build();
-    strip.append(&section_heading(heading));
     strip.append(&scroller);
     (strip, row)
 }
