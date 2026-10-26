@@ -192,6 +192,7 @@ pub struct Ui {
     detail_title: gtk::Label,
     detail_subtitle: gtk::Label,
     detail_moves: gtk::Box,
+    detail_clamp: adw::Clamp,
     detail_actions: gio::SimpleActionGroup,
     preset_list: gtk::ListBox,
     preset_search: gtk::SearchEntry,
@@ -373,7 +374,10 @@ fn node_strip(heading: &str) -> (gtk::Box, gtk::Box) {
         .orientation(gtk::Orientation::Horizontal)
         .spacing(NODE_GAP)
         .valign(gtk::Align::Start)
-        .css_classes(["chain-row"])
+        .margin_start(ROW_INSET)
+        .margin_end(ROW_INSET)
+        .margin_top(ROW_INSET)
+        .margin_bottom(ROW_INSET)
         .build();
     let wrap = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -381,7 +385,7 @@ fn node_strip(heading: &str) -> (gtk::Box, gtk::Box) {
         .margin_bottom(SCROLLBAR_ROOM)
         .build();
     let title = section_heading(heading);
-    title.set_margin_start(12);
+    title.set_margin_start(ROW_INSET);
     wrap.append(&title);
     wrap.append(&flow_arrow());
     wrap.append(&row);
@@ -402,8 +406,8 @@ fn node_strip(heading: &str) -> (gtk::Box, gtk::Box) {
 fn flow_arrow() -> gtk::DrawingArea {
     let area = gtk::DrawingArea::builder()
         .content_height(12)
-        .margin_start(12)
-        .margin_end(12)
+        .margin_start(ROW_INSET)
+        .margin_end(ROW_INSET)
         .margin_top(8)
         .css_classes(["flow-arrow"])
         .build();
@@ -435,7 +439,7 @@ fn flow_arrow() -> gtk::DrawingArea {
 fn build_editor(
     channel_section: &adw::Clamp,
     chain: &gtk::Box,
-    detail: &gtk::Box,
+    detail: &adw::Clamp,
     output: &gtk::Box,
 ) -> gtk::Box {
     let editor = gtk::Box::builder()
@@ -449,6 +453,7 @@ fn build_editor(
 }
 
 struct Detail {
+    clamp: adw::Clamp,
     panel: gtk::Box,
     holder: adw::Bin,
     icon: gtk::Image,
@@ -521,8 +526,6 @@ fn build_detail() -> Detail {
     let panel = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .vexpand(true)
-        .margin_start(DETAIL_MARGIN)
-        .margin_end(DETAIL_MARGIN)
         .css_classes(["card", "detail-sheet"])
         .overflow(gtk::Overflow::Hidden)
         .build();
@@ -530,7 +533,14 @@ fn build_detail() -> Detail {
     panel.append(&holder);
     let actions = gio::SimpleActionGroup::new();
     panel.insert_action_group("detail", Some(&actions));
+    let clamp = adw::Clamp::builder()
+        .child(&panel)
+        .vexpand(true)
+        .margin_start(DETAIL_MARGIN)
+        .margin_end(DETAIL_MARGIN)
+        .build();
     Detail {
+        clamp,
         panel,
         holder,
         icon,
@@ -586,6 +596,7 @@ const DRAG_ICON_MARGIN: u8 = 24;
 const NODE_WIDTH: i32 = 104;
 const NODE_HEIGHT: i32 = 96;
 const NODE_GAP: i32 = 20;
+const ROW_INSET: i32 = 12;
 const NODE_ICON: i32 = 28;
 const NODE_CHARS: i32 = 11;
 const NODE_INSET: i32 = 10;
@@ -640,7 +651,7 @@ impl Ui {
         let (sidebar, preset_search, preset_list) = build_sidebar();
         let (chain, chain_box, output, extras_box) = build_blocks_row();
         let detail = build_detail();
-        let editor = build_editor(&channel_section, &chain, &detail.panel, &output);
+        let editor = build_editor(&channel_section, &chain, &detail.clamp, &output);
 
         let retry_button = gtk::Button::builder()
             .label(tr("Try Again"))
@@ -698,6 +709,7 @@ impl Ui {
             detail_title: detail.title,
             detail_subtitle: detail.subtitle,
             detail_moves: detail.moves,
+            detail_clamp: detail.clamp.clone(),
             detail_actions: detail.actions,
             preset_list,
             preset_search,
@@ -1963,6 +1975,8 @@ impl Ui {
             card.root.set_tooltip_text(Some(&tooltip));
         }
         self.updating.set(previous);
+        drop(model);
+        self.fit_detail();
     }
 
     fn rebuild_chain(self: &Rc<Self>, order: &[&'static BlockSpec]) {
@@ -1997,6 +2011,19 @@ impl Ui {
         *self.cards.borrow_mut() = cards;
         *self.gaps.borrow_mut() = gaps;
         self.drop_gap.set(None);
+        self.fit_detail();
+    }
+
+    fn fit_detail(&self) {
+        if self.dragging.get().is_some() {
+            return;
+        }
+        let (_, natural, _, _) = self.chain_box.measure(gtk::Orientation::Horizontal, -1);
+        let width = (natural - 2 * ROW_INSET).max(0);
+        if width > 0 && self.detail_clamp.maximum_size() != width {
+            self.detail_clamp.set_maximum_size(width);
+            self.detail_clamp.set_tightening_threshold(width);
+        }
     }
 
     fn make_card(self: &Rc<Self>, spec: &'static BlockSpec) -> Card {
