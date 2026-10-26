@@ -239,3 +239,22 @@
 .detail-slider .detail-scale {
   margin: 0 -10px;
 }
+
+.conn-light {
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: 6px;
+  transition: background-color 150ms ease;
+}
+
+.conn-ok {
+  background-color: var(--success-color);
+}
+
+.conn-busy {
+  background-color: var(--warning-color);
+}
+
+.conn-off {
+  background-color: var(--error-color);
+}

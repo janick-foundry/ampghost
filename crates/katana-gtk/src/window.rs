@@ -181,6 +181,7 @@ pub struct Ui {
     title: adw::WindowTitle,
     status_box: gtk::Box,
     status_label: gtk::Label,
+    light: gtk::Box,
     channel_buttons: Vec<(Channel, gtk::Button)>,
     stack: gtk::Stack,
     status_page: adw::StatusPage,
@@ -658,7 +659,7 @@ fn section_heading(text: &str) -> gtk::Label {
 
 impl Ui {
     fn build(app: &adw::Application, table: &'static ParamTable, engine: EngineHandle) -> Rc<Self> {
-        let (header, title, status_box, status_label, sidebar_button) = build_header();
+        let (header, title, status_box, status_label, light, content_toggle) = build_header();
         let (channel_section, channel_buttons) = build_channels();
         let (sidebar, preset_search, preset_list) = build_sidebar();
         let (chain, chain_box, output, extras_box) = build_blocks_row();
@@ -678,21 +679,9 @@ impl Ui {
         stack.add_named(&status_page, Some("status"));
         stack.add_named(&editor, Some("editor"));
 
-        let split = adw::OverlaySplitView::builder()
-            .sidebar(&sidebar)
-            .content(&stack)
-            .min_sidebar_width(240.0)
-            .build();
-        sidebar_button
-            .bind_property("active", &split, "show-sidebar")
-            .bidirectional()
-            .sync_create()
-            .build();
-        let toolbar = adw::ToolbarView::new();
-        toolbar.add_top_bar(&header);
-        toolbar.set_content(Some(&split));
+        let split = build_split(&sidebar, &header, &stack, &content_toggle);
         let toasts = adw::ToastOverlay::new();
-        toasts.set_child(Some(&toolbar));
+        toasts.set_child(Some(&split));
         let window = adw::ApplicationWindow::builder()
             .application(app)
             .title(tr("Katana Control"))
@@ -710,6 +699,7 @@ impl Ui {
             title,
             status_box,
             status_label,
+            light,
             channel_buttons,
             stack,
             status_page,
@@ -1831,7 +1821,46 @@ impl Ui {
             action.set_enabled(!busy);
         }
         self.sidebar.set_sensitive(true);
+        self.refresh_light();
         self.refresh_card_actions();
+    }
+
+    fn refresh_light(&self) {
+        let busy = self.is_busy() || !self.pending.borrow().is_empty();
+        let model = self.model.borrow();
+        let connecting = self.jobs.borrow().contains(&Job::Detect);
+        let (class, text) = match &model.device {
+            None if connecting => ("conn-busy", tr("Looking for Katana…")),
+            None => ("conn-off", tr("Not connected")),
+            Some(device) if busy => (
+                "conn-busy",
+                trf(
+                    "{model}: talking to the amp…",
+                    &[("model", &device.model_name())],
+                ),
+            ),
+            Some(device) if device.is_supported() => (
+                "conn-ok",
+                trf("{model} connected", &[("model", &device.model_name())]),
+            ),
+            Some(device) => (
+                "conn-ok",
+                trf(
+                    "{model} connected, read-only",
+                    &[("model", &device.model_name())],
+                ),
+            ),
+        };
+        for name in ["conn-ok", "conn-busy", "conn-off"] {
+            if name == class {
+                self.light.add_css_class(name);
+            } else {
+                self.light.remove_css_class(name);
+            }
+        }
+        self.light.set_tooltip_text(Some(&text));
+        self.light
+            .update_property(&[gtk::accessible::Property::Label(&text)]);
     }
 
     fn refresh_card_actions(&self) {
@@ -2296,18 +2325,71 @@ type Header = (
     adw::WindowTitle,
     gtk::Box,
     gtk::Label,
+    gtk::Box,
     gtk::ToggleButton,
 );
+
+fn sidebar_toggle() -> gtk::ToggleButton {
+    gtk::ToggleButton::builder()
+        .icon_name("sidebar-show-symbolic")
+        .tooltip_text(tr("Show Presets"))
+        .active(true)
+        .build()
+}
+
+fn build_split(
+    sidebar: &gtk::Box,
+    header: &adw::HeaderBar,
+    stack: &gtk::Stack,
+    content_toggle: &gtk::ToggleButton,
+) -> adw::OverlaySplitView {
+    let (sidebar_header, sidebar_toggle) = build_sidebar_header();
+    let sidebar_pane = adw::ToolbarView::new();
+    sidebar_pane.add_top_bar(&sidebar_header);
+    sidebar_pane.set_content(Some(sidebar));
+    let content_pane = adw::ToolbarView::new();
+    content_pane.add_top_bar(header);
+    content_pane.set_content(Some(stack));
+    let split = adw::OverlaySplitView::builder()
+        .sidebar(&sidebar_pane)
+        .content(&content_pane)
+        .min_sidebar_width(240.0)
+        .build();
+    for toggle in [&sidebar_toggle, content_toggle] {
+        toggle
+            .bind_property("active", &split, "show-sidebar")
+            .bidirectional()
+            .sync_create()
+            .build();
+    }
+    split
+        .bind_property("show-sidebar", content_toggle, "visible")
+        .invert_boolean()
+        .sync_create()
+        .build();
+    split
+}
+
+fn build_sidebar_header() -> (adw::HeaderBar, gtk::ToggleButton) {
+    let header = adw::HeaderBar::new();
+    let toggle = sidebar_toggle();
+    toggle.set_tooltip_text(Some(&tr("Hide Presets")));
+    header.pack_start(&toggle);
+    header.pack_start(
+        &gtk::Label::builder()
+            .label(tr("Katana Control"))
+            .css_classes(["heading"])
+            .build(),
+    );
+    header.set_title_widget(Some(&adw::Bin::new()));
+    (header, toggle)
+}
 
 fn build_header() -> Header {
     let title = adw::WindowTitle::new(&tr("Katana Control"), &tr("Not connected"));
     let header = adw::HeaderBar::new();
     header.set_title_widget(Some(&title));
-    let sidebar_button = gtk::ToggleButton::builder()
-        .icon_name("sidebar-show-symbolic")
-        .tooltip_text(tr("Show Presets"))
-        .active(true)
-        .build();
+    let sidebar_button = sidebar_toggle();
     header.pack_start(&sidebar_button);
     let menu_button = gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
@@ -2316,6 +2398,15 @@ fn build_header() -> Header {
         .tooltip_text(tr("Main Menu"))
         .build();
     header.pack_end(&menu_button);
+    let light = gtk::Box::builder()
+        .css_classes(["conn-light", "conn-off"])
+        .valign(gtk::Align::Center)
+        .halign(gtk::Align::Center)
+        .margin_start(6)
+        .margin_end(6)
+        .accessible_role(gtk::AccessibleRole::Img)
+        .build();
+    header.pack_end(&light);
     let status_label = gtk::Label::builder()
         .css_classes(["dim-label", "status-label"])
         .ellipsize(gtk::pango::EllipsizeMode::End)
@@ -2330,7 +2421,14 @@ fn build_header() -> Header {
     status_box.append(&status_label);
     header.pack_end(&status_box);
 
-    (header, title, status_box, status_label, sidebar_button)
+    (
+        header,
+        title,
+        status_box,
+        status_label,
+        light,
+        sidebar_button,
+    )
 }
 
 fn build_channels() -> (adw::Clamp, Vec<(Channel, gtk::Button)>) {
@@ -2402,14 +2500,6 @@ fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
         .margin_start(8)
         .margin_end(8)
         .build();
-    sidebar.append(
-        &gtk::Label::builder()
-            .label(tr("My Presets"))
-            .xalign(0.0)
-            .margin_start(6)
-            .css_classes(["heading"])
-            .build(),
-    );
     sidebar.append(&preset_search);
     sidebar.append(
         &gtk::ScrolledWindow::builder()
