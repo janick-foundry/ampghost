@@ -196,7 +196,11 @@ impl Engine {
         let Some(session) = self.session.as_mut() else {
             return;
         };
-        let switched = session.follow_amp_switch(&packets);
+        let switched = if session.device().is_supported() {
+            session.follow_amp_switch(&packets)
+        } else {
+            Ok(None)
+        };
         for packet in packets.into_iter().chain(session.take_unsolicited()) {
             sink(Event::Unsolicited(packet));
         }
