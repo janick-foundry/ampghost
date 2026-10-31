@@ -20,7 +20,7 @@ use crate::blocks::{self, BlockSpec, Variant};
 use crate::bridge;
 use crate::dialogs::{self, SwitchChoice};
 use crate::i18n::{tr, trf};
-use crate::mk3_view::Mk3View;
+use crate::mk3_overlay::{self, Mk3Overlay};
 use crate::params_view::{self, Edit, OnChange, ParamsView, Structure};
 
 const EVENT_PUMP: Duration = Duration::from_millis(30);
@@ -92,7 +92,7 @@ struct Model {
     failed_detect: bool,
     held: Option<Held>,
     lost_edits: Option<PatchImage>,
-    mk3: Option<Mk3State>,
+    mk3: Option<Mk3Overlay>,
 }
 
 struct Held {
@@ -200,7 +200,6 @@ pub struct Ui {
     channel_buttons: Vec<(Channel, gtk::Button)>,
     stack: gtk::Stack,
     status_page: adw::StatusPage,
-    mk3_view: Mk3View,
     retry_button: gtk::Button,
     chain_box: gtk::Box,
     extras_box: gtk::Box,
@@ -695,8 +694,6 @@ impl Ui {
             .build();
         stack.add_named(&status_page, Some("status"));
         stack.add_named(&editor, Some("editor"));
-        let mk3_view = Mk3View::new();
-        stack.add_named(&mk3_view.root, Some("mk3"));
 
         let split = build_split(&sidebar, &header, &stack, &content_toggle);
         let toasts = adw::ToastOverlay::new();
@@ -722,7 +719,6 @@ impl Ui {
             channel_buttons,
             stack,
             status_page,
-            mk3_view,
             retry_button,
             chain_box,
             extras_box,
@@ -1084,10 +1080,7 @@ impl Ui {
             Event::Detected(report) => self.on_detected(report),
             Event::Reconnected(report) => self.on_reconnected(report),
             Event::Disconnected { port } => self.on_disconnected(&port),
-            Event::Mk3Read(state) | Event::Mk3Changed(state) => {
-                self.model.borrow_mut().mk3 = Some(state);
-                self.refresh_all();
-            }
+            Event::Mk3Read(state) | Event::Mk3Changed(state) => self.on_mk3_state(&state),
             Event::TempRead(image) => {
                 self.set_image(image);
                 self.reconcile_held();
@@ -1270,6 +1263,33 @@ impl Ui {
         self.adopt_image(outcome.image);
     }
 
+    fn on_mk3_state(self: &Rc<Self>, state: &Mk3State) {
+        let read_only = self
+            .model
+            .borrow()
+            .device
+            .as_ref()
+            .is_some_and(DeviceInfo::is_read_only_model);
+        if !read_only {
+            return;
+        }
+        let Some((image, overlay)) = mk3_overlay::project(self.table, state) else {
+            return;
+        };
+        {
+            let mut model = self.model.borrow_mut();
+            model.baseline = Some(image.clone());
+            model.image = Some(image);
+            model.mk3 = Some(overlay);
+            if !mk3_overlay::CHAIN.contains(&model.selected)
+                && !mk3_overlay::OUTPUT.contains(&model.selected)
+            {
+                model.selected = "amp";
+            }
+        }
+        self.refresh_all();
+    }
+
     fn on_reconnected(self: &Rc<Self>, report: DetectReport) {
         self.toast(&trf(
             "{model} connected",
@@ -1287,6 +1307,13 @@ impl Ui {
         {
             let mut model = self.model.borrow_mut();
             let profile = model.device.as_ref().and_then(|device| device.profile);
+            let read_only = model
+                .device
+                .as_ref()
+                .is_some_and(DeviceInfo::is_read_only_model);
+            if read_only {
+                model.image = None;
+            }
             if let Some(image) = model.image.take() {
                 let writes = writes
                     .into_iter()
@@ -1852,9 +1879,8 @@ impl Ui {
         self.retry_button.set_visible(false);
         match (&model.device, &model.image) {
             (Some(device), _) if device.is_read_only_model() => {
-                if let Some(state) = &model.mk3 {
-                    self.mk3_view.update(state);
-                    self.stack.set_visible_child_name("mk3");
+                if model.image.is_some() {
+                    self.stack.set_visible_child_name("editor");
                     return;
                 }
                 page.set_paintable(Some(&adw::SpinnerPaintable::new(Some(page))));
@@ -1900,7 +1926,6 @@ impl Ui {
             .image
             .as_ref()
             .map(PatchImage::name)
-            .or_else(|| model.mk3.as_ref().map(|state| state.name.clone()))
             .filter(|name| !name.is_empty());
         let title = match patch {
             Some(name) if dirty => trf("{name} • Edited", &[("name", &name)]),
@@ -2069,10 +2094,7 @@ impl Ui {
         let Some(image) = model.image.as_ref() else {
             return;
         };
-        let order: Vec<&'static BlockSpec> = blocks::chain_order(self.table, image)
-            .into_iter()
-            .chain(blocks::extras())
-            .collect();
+        let order = chain_specs(self.table, model.mk3.is_some(), image);
         let keys: Vec<&'static str> = order.iter().map(|spec| spec.key).collect();
         if *self.chain_keys.borrow() != keys {
             self.rebuild_chain(&order);
@@ -2129,7 +2151,7 @@ impl Ui {
                 };
                 power.set_tooltip_text(Some(&tip));
             }
-            let variant = blocks::variant(self.table, image, spec);
+            let variant = card_variant(self.table, model.mk3.as_ref(), image, spec);
             for class in [
                 "variant-green",
                 "variant-red",
@@ -2145,7 +2167,7 @@ impl Ui {
             card.dot.set_tooltip_text(Some(&variant_text));
             card.dot
                 .update_property(&[gtk::accessible::Property::Label(&variant_text)]);
-            let type_text = blocks::type_label(self.table, image, spec).unwrap_or_default();
+            let type_text = type_text(self.table, model.mk3.as_ref(), image, spec);
             card.type_label.set_text(&type_text);
             card.type_label.set_visible(!type_text.is_empty());
             let tooltip = if type_text.is_empty() {
@@ -2401,13 +2423,18 @@ impl Ui {
         };
         self.detail_title.set_text(&tr(spec.title));
         self.detail_icon.set_icon_name(Some(spec.icon));
-        let type_text = blocks::type_label(self.table, image, spec).unwrap_or_default();
+        let type_text = type_text(self.table, model.mk3.as_ref(), image, spec);
         self.detail_subtitle.set_text(&type_text);
         self.detail_subtitle.set_visible(!type_text.is_empty());
         let structure = Structure {
             block: spec.key,
-            type_value: blocks::type_value(self.table, image, spec),
+            type_value: if model.mk3.is_some() {
+                None
+            } else {
+                blocks::type_value(self.table, image, spec)
+            },
             writable: writable(&model),
+            overlay: model.mk3.clone(),
         };
         let current = self
             .params
@@ -2439,6 +2466,49 @@ impl Ui {
         );
         self.params_holder.set_child(Some(&view.root));
         *self.params.borrow_mut() = Some(view);
+    }
+}
+
+fn chain_specs(table: &ParamTable, mk3: bool, image: &PatchImage) -> Vec<&'static BlockSpec> {
+    if mk3 {
+        mk3_overlay::CHAIN
+            .iter()
+            .chain(&mk3_overlay::OUTPUT)
+            .filter_map(|key| blocks::spec(key))
+            .collect()
+    } else {
+        blocks::chain_order(table, image)
+            .into_iter()
+            .chain(blocks::extras())
+            .collect()
+    }
+}
+
+fn card_variant(
+    table: &ParamTable,
+    overlay: Option<&Mk3Overlay>,
+    image: &PatchImage,
+    spec: &BlockSpec,
+) -> Option<Variant> {
+    match overlay {
+        Some(overlay) if !spec.select_param.is_some_and(|id| overlay.shows(id)) => None,
+        _ => blocks::variant(table, image, spec),
+    }
+}
+
+fn type_text(
+    table: &ParamTable,
+    overlay: Option<&Mk3Overlay>,
+    image: &PatchImage,
+    spec: &BlockSpec,
+) -> String {
+    match overlay {
+        Some(overlay) => spec
+            .type_param
+            .and_then(|id| overlay.text(id))
+            .map(ToOwned::to_owned)
+            .unwrap_or_default(),
+        None => blocks::type_label(table, image, spec).unwrap_or_default(),
     }
 }
 

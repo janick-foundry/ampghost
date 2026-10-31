@@ -7,6 +7,7 @@ use katana_protocol::PatchImage;
 
 use crate::blocks::{self, BlockSpec, Variant};
 use crate::i18n::{tr, trf};
+use crate::mk3_overlay::Mk3Overlay;
 
 const SPIN_THRESHOLD: u16 = 127;
 pub const CONTENT_WIDTH: i32 = 680;
@@ -28,6 +29,7 @@ pub struct Structure {
     pub block: &'static str,
     pub type_value: Option<u16>,
     pub writable: bool,
+    pub overlay: Option<Mk3Overlay>,
 }
 
 pub struct ParamsView {
@@ -99,6 +101,15 @@ pub fn build(
             id if id == spec.select_param => tr("Variant"),
             _ => tr("Type"),
         };
+        if let Some(overlay) = &structure.overlay {
+            if let Some(text) = overlay.text(id) {
+                main.add(&text_row(&title, text));
+                continue;
+            }
+            if !overlay.shows(id) {
+                continue;
+            }
+        }
         let (row, update) = match param.kind() {
             ParamKind::Enum { options } if Some(id) == spec.select_param => {
                 variant_row(param, options, &title, guard, on_change)
@@ -110,11 +121,10 @@ pub fn build(
         updaters.push((param.id(), update));
     }
     content.append(&main.root);
-    let params = blocks::block_params(table, image, spec);
+    let (params, type_text) = detail_params(table, image, spec, &structure);
     let details = Section::new(
         Some(tr("Parameters")),
-        blocks::type_label(table, image, spec)
-            .map(|label| trf("Settings for {type}", &[("type", &label)])),
+        type_text.map(|label| trf("Settings for {type}", &[("type", &label)])),
     );
     if params.is_empty() {
         details.add(
@@ -126,6 +136,14 @@ pub fn build(
     }
     for param in params {
         let label = blocks::pretty_label(param.label());
+        if let Some(text) = structure
+            .overlay
+            .as_ref()
+            .and_then(|overlay| overlay.text(param.id()))
+        {
+            details.add(&text_row(&label, text));
+            continue;
+        }
         let (row, update) = make_row(param, &label, guard, on_change);
         row.set_sensitive(structure.writable);
         details.add(&row);
@@ -140,6 +158,46 @@ pub fn build(
     view.update(table, image, guard, &|_| false);
     guard.set(previous);
     view
+}
+
+fn detail_params(
+    table: &'static ParamTable,
+    image: &PatchImage,
+    spec: &'static BlockSpec,
+    structure: &Structure,
+) -> (Vec<&'static Param>, Option<String>) {
+    let params = blocks::block_params(table, image, spec)
+        .into_iter()
+        .filter(|param| {
+            structure
+                .overlay
+                .as_ref()
+                .is_none_or(|overlay| overlay.shows(param.id()))
+        })
+        .collect();
+    let type_text = match &structure.overlay {
+        Some(overlay) => spec
+            .type_param
+            .and_then(|id| overlay.text(id))
+            .map(ToOwned::to_owned),
+        None => blocks::type_label(table, image, spec),
+    };
+    (params, type_text)
+}
+
+fn text_row(title: &str, value: &str) -> gtk::Widget {
+    let row = adw::ActionRow::builder()
+        .title(title)
+        .title_lines(1)
+        .sensitive(false)
+        .build();
+    row.add_suffix(
+        &gtk::Label::builder()
+            .label(value)
+            .css_classes(["numeric"])
+            .build(),
+    );
+    row.upcast()
 }
 
 struct Section {
