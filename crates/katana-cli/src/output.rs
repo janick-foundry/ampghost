@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 
 use katana_engine::{ChainOutcome, DetectReport, WriteOutcome};
-use katana_protocol::{Dt1, KATANA_50_MK2, PatchImage};
+use katana_protocol::{Dt1, KATANA_50_MK2, Mk3State, PatchImage};
 use sha2::{Digest, Sha256};
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -26,6 +26,10 @@ pub fn print_detect(report: &DetectReport) {
     println!("port:      {}", device.port);
     println!("identity:  {}", device.identity);
     println!("model:     {}", device.model_name());
+    if device.is_read_only_model() {
+        println!("status:    supported read only, writes refused");
+        return;
+    }
     if !device.is_supported() {
         println!("status:    unsupported, writes refused (identity information only)");
         return;
@@ -42,6 +46,31 @@ pub fn print_detect(report: &DetectReport) {
             .join(" ");
         println!("pc map:    {entries}");
     }
+}
+
+pub fn print_mk3(state: &Mk3State) {
+    let channel = state
+        .channel
+        .map_or_else(|| "unknown".to_owned(), |channel| channel.to_string());
+    let amp = state.amp_type.map_or("unknown", |amp| amp.label());
+    let variation = if state.variation { " (variation)" } else { "" };
+    println!("patch name: {}", state.name);
+    println!("channel:    {channel}");
+    println!("amp type:   {amp}{variation}");
+    println!(
+        "amp:        gain {} volume {} bass {} middle {} treble {}",
+        state.gain, state.volume, state.bass, state.middle, state.treble
+    );
+    for effect in &state.effects {
+        let colour = effect.colour.map_or("unknown", |colour| colour.label());
+        let power = if effect.on { "on" } else { "off" };
+        println!(
+            "{:<11} {power:<3} {colour:<7} panel knob {}",
+            format!("{}:", effect.effect.label()),
+            effect.knob
+        );
+    }
+    println!("delay time: {} ms", state.delay_time_ms);
 }
 
 pub fn print_image(image: &PatchImage, syx: &[u8]) {

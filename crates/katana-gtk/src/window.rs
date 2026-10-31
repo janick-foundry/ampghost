@@ -13,13 +13,14 @@ use katana_engine::{
 };
 use katana_params::ParamTable;
 use katana_protocol::{
-    Channel, DeviceProfile, Dt1, PatchImage, PatchOffset, parse_current_channel,
+    Channel, DeviceProfile, Dt1, Mk3State, PatchImage, PatchOffset, parse_current_channel,
 };
 
 use crate::blocks::{self, BlockSpec, Variant};
 use crate::bridge;
 use crate::dialogs::{self, SwitchChoice};
 use crate::i18n::{tr, trf};
+use crate::mk3_view::Mk3View;
 use crate::params_view::{self, Edit, OnChange, ParamsView, Structure};
 
 const EVENT_PUMP: Duration = Duration::from_millis(30);
@@ -91,6 +92,7 @@ struct Model {
     failed_detect: bool,
     held: Option<Held>,
     lost_edits: Option<PatchImage>,
+    mk3: Option<Mk3State>,
 }
 
 struct Held {
@@ -198,6 +200,7 @@ pub struct Ui {
     channel_buttons: Vec<(Channel, gtk::Button)>,
     stack: gtk::Stack,
     status_page: adw::StatusPage,
+    mk3_view: Mk3View,
     retry_button: gtk::Button,
     chain_box: gtk::Box,
     extras_box: gtk::Box,
@@ -692,6 +695,8 @@ impl Ui {
             .build();
         stack.add_named(&status_page, Some("status"));
         stack.add_named(&editor, Some("editor"));
+        let mk3_view = Mk3View::new();
+        stack.add_named(&mk3_view.root, Some("mk3"));
 
         let split = build_split(&sidebar, &header, &stack, &content_toggle);
         let toasts = adw::ToastOverlay::new();
@@ -717,6 +722,7 @@ impl Ui {
             channel_buttons,
             stack,
             status_page,
+            mk3_view,
             retry_button,
             chain_box,
             extras_box,
@@ -1078,6 +1084,10 @@ impl Ui {
             Event::Detected(report) => self.on_detected(report),
             Event::Reconnected(report) => self.on_reconnected(report),
             Event::Disconnected { port } => self.on_disconnected(&port),
+            Event::Mk3Read(state) | Event::Mk3Changed(state) => {
+                self.model.borrow_mut().mk3 = Some(state);
+                self.refresh_all();
+            }
             Event::TempRead(image) => {
                 self.set_image(image);
                 self.reconcile_held();
@@ -1179,6 +1189,7 @@ impl Ui {
             model.channel = report.current_channel;
             model.image = None;
             model.baseline = None;
+            model.mk3 = None;
             model.failed_detect = false;
         }
         self.drop_pending_writes("amp detected");
@@ -1295,6 +1306,7 @@ impl Ui {
             model.channel = None;
             model.image = None;
             model.baseline = None;
+            model.mk3 = None;
             model.pending_switch = None;
             model.failed_detect = true;
         }
@@ -1839,6 +1851,16 @@ impl Ui {
         page.set_paintable(None::<&gtk::gdk::Paintable>);
         self.retry_button.set_visible(false);
         match (&model.device, &model.image) {
+            (Some(device), _) if device.is_read_only_model() => {
+                if let Some(state) = &model.mk3 {
+                    self.mk3_view.update(state);
+                    self.stack.set_visible_child_name("mk3");
+                    return;
+                }
+                page.set_paintable(Some(&adw::SpinnerPaintable::new(Some(page))));
+                page.set_title(&tr("Reading from Katana…"));
+                page.set_description(None);
+            }
             (Some(device), _) if !device.is_supported() => {
                 page.set_icon_name(Some("dialog-warning-symbolic"));
                 page.set_title(&tr("This Model Is Not Supported Yet"));
@@ -1878,6 +1900,7 @@ impl Ui {
             .image
             .as_ref()
             .map(PatchImage::name)
+            .or_else(|| model.mk3.as_ref().map(|state| state.name.clone()))
             .filter(|name| !name.is_empty());
         let title = match patch {
             Some(name) if dirty => trf("{name} • Edited", &[("name", &name)]),
@@ -1947,7 +1970,9 @@ impl Ui {
             None => ("conn-off", tr("Not connected")),
             Some(device) => {
                 let name = device.model_name();
-                let text = if device.is_supported() {
+                let text = if device.is_read_only_model() {
+                    trf("{model} connected (read only)", &[("model", &name)])
+                } else if device.is_supported() {
                     trf("{model} connected", &[("model", &name)])
                 } else {
                     trf("{model} connected, read-only", &[("model", &name)])

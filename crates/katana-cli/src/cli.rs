@@ -21,6 +21,7 @@ pub struct Args {
 #[derive(Debug, Subcommand)]
 pub enum Action {
     Detect,
+    ReadMk3,
     ReadTemp {
         #[arg(long)]
         dump: bool,

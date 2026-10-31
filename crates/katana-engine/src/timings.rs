@@ -15,6 +15,7 @@ pub struct Timings {
     pub read_attempts: u8,
     pub port_check: Duration,
     pub connect_attempts: u8,
+    pub mk3_poll: Duration,
 }
 
 impl Default for Timings {
@@ -33,6 +34,7 @@ impl Default for Timings {
             read_attempts: 2,
             port_check: Duration::from_secs(3),
             connect_attempts: 3,
+            mk3_poll: Duration::from_millis(1500),
         }
     }
 }

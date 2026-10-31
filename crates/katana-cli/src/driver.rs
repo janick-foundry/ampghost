@@ -16,7 +16,8 @@ use katana_store::{
 
 use crate::cli::{Action, Args};
 use crate::output::{
-    print_chain_outcome, print_detect, print_dump, print_image, print_outcome, sha256_hex,
+    print_chain_outcome, print_detect, print_dump, print_image, print_mk3, print_outcome,
+    sha256_hex,
 };
 
 const EVENT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -101,6 +102,7 @@ impl Driver {
                 .map_err(|_| anyhow!("engine did not answer"))?;
             match event {
                 Event::Progress(stage) => tracing::info!(?stage, "progress"),
+                Event::Mk3Changed(state) => tracing::debug!(?state, "MK III state"),
                 Event::Unsolicited(packet) => tracing::info!(%packet, "unsolicited from amp"),
                 Event::AmpSwitched(switch) => tracing::info!(
                     channel = %switch.channel,
@@ -127,6 +129,26 @@ impl Driver {
         }
     }
 
+    fn detect(&mut self) -> Result<()> {
+        match self.request(Command::Detect)? {
+            Event::Detected(report) => {
+                print_detect(&report);
+                Ok(())
+            }
+            other => bail!("unexpected engine event {other:?}"),
+        }
+    }
+
+    fn read_mk3(&mut self) -> Result<()> {
+        match self.request(Command::ReadMk3)? {
+            Event::Mk3Read(state) => {
+                print_mk3(&state);
+                Ok(())
+            }
+            other => bail!("unexpected engine event {other:?}"),
+        }
+    }
+
     fn execute(
         &mut self,
         action: Action,
@@ -134,10 +156,8 @@ impl Driver {
         backups: &FileStorage,
     ) -> Result<()> {
         match action {
-            Action::Detect => match self.request(Command::Detect)? {
-                Event::Detected(report) => print_detect(&report),
-                other => bail!("unexpected engine event {other:?}"),
-            },
+            Action::Detect => self.detect()?,
+            Action::ReadMk3 => self.read_mk3()?,
             Action::ReadTemp { dump } => {
                 let image = self.read_temp()?;
                 print_image(&image, &encode_syx(&image, PROFILE.temp_patch)?);

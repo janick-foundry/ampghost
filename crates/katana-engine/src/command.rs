@@ -1,4 +1,6 @@
-use katana_protocol::{Channel, Dt1, Identity, PatchImage, ProgramChangeMap, VerifyReport};
+use katana_protocol::{
+    Channel, Dt1, Gen3Model, Identity, Mk3State, PatchImage, ProgramChangeMap, VerifyReport,
+};
 
 use crate::error::EngineError;
 
@@ -12,6 +14,7 @@ pub struct ParamWrite {
 pub enum Command {
     Detect,
     ReadTemp,
+    ReadMk3,
     WriteTemp(PatchImage),
     WriteParams(Vec<ParamWrite>),
     WriteChain(Vec<u8>),
@@ -30,14 +33,22 @@ pub struct DeviceInfo {
     pub port: String,
     pub identity: Identity,
     pub profile: Option<&'static katana_protocol::DeviceProfile>,
+    pub gen3: Option<&'static Gen3Model>,
 }
 
 impl DeviceInfo {
     pub fn model_name(&self) -> String {
+        if let Some(model) = self.gen3 {
+            return model.name.to_owned();
+        }
         self.profile.map_or_else(
             || format!("unknown device {}", self.identity.hex()),
             |profile| profile.name.to_owned(),
         )
+    }
+
+    pub fn is_read_only_model(&self) -> bool {
+        self.gen3.is_some()
     }
 
     pub fn is_supported(&self) -> bool {
@@ -140,6 +151,8 @@ pub enum Event {
     Presets(Vec<PresetEntry>),
     Backups(Vec<String>),
     Unsolicited(Dt1),
+    Mk3Read(Mk3State),
+    Mk3Changed(Mk3State),
     AmpSwitched(AmpSwitch),
     Disconnected {
         port: String,
@@ -154,6 +167,7 @@ impl Event {
         !matches!(
             self,
             Self::Progress(_)
+                | Self::Mk3Changed(_)
                 | Self::Unsolicited(_)
                 | Self::AmpSwitched(_)
                 | Self::Disconnected { .. }

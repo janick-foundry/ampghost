@@ -12,6 +12,10 @@ pub enum EngineError {
         "unsupported device ({identity}); only identity information is available and all writes are refused"
     )]
     Unsupported { identity: String },
+    #[error("{model} is supported read only; this action is refused")]
+    ReadOnly { model: String },
+    #[error("{model} does not support this read")]
+    NotMk3 { model: String },
     #[error(transparent)]
     Midi(#[from] MidiError),
     #[error(transparent)]

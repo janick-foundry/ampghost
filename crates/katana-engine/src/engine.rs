@@ -4,7 +4,9 @@ use std::time::{Duration, Instant};
 
 use katana_midi::{MidiBackend, PortInfo, katana_candidates};
 use katana_params::ParamTable;
-use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset, ProtocolError, verify};
+use katana_protocol::{
+    Dt1, LinkedType, Mk3Raw, Mk3State, PatchImage, PatchOffset, ProtocolError, verify,
+};
 use katana_store::{
     Preset, PresetStorage, decode_preset, decode_syx, encode_preset, encode_syx, preset_key,
     read_preset_summary, validate_key,
@@ -29,6 +31,8 @@ pub struct Engine {
     auto_connect: bool,
     next_port_check: Option<Instant>,
     probed: HashMap<String, u8>,
+    mk3_raw: Option<Mk3Raw>,
+    next_mk3_poll: Option<Instant>,
 }
 
 impl Engine {
@@ -49,6 +53,8 @@ impl Engine {
             auto_connect: false,
             next_port_check: None,
             probed: HashMap::new(),
+            mk3_raw: None,
+            next_mk3_poll: None,
         }
     }
 
@@ -86,6 +92,8 @@ impl Engine {
         };
         let port = session.device().port.clone();
         drop(session);
+        self.mk3_raw = None;
+        self.next_mk3_poll = None;
         self.lost = true;
         self.probed.clear();
         tracing::info!(%port, "Katana disconnected");
@@ -183,12 +191,64 @@ impl Engine {
             }
             let packets = session.take_unsolicited();
             self.forward_unsolicited(packets, sink);
+            self.poll_mk3(sink);
         }
         let due = self
             .next_port_check
             .is_none_or(|next| self.clock.now() >= next);
         if due && (self.session.is_some() || self.auto_connect) {
             self.ports_changed(sink);
+        }
+    }
+
+    fn poll_mk3(&mut self, sink: &mut dyn FnMut(Event)) {
+        let now = self.clock.now();
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        if !session.device().is_read_only_model()
+            || self.next_mk3_poll.is_some_and(|next| now < next)
+        {
+            return;
+        }
+        let result = session.read_mk3(self.mk3_raw.as_ref());
+        self.next_mk3_poll = Some(self.clock.now() + self.timings.mk3_poll);
+        match result {
+            Ok(raw) => {
+                let state = Mk3State::decode(&raw);
+                let changed = self
+                    .mk3_raw
+                    .as_ref()
+                    .is_none_or(|old| Mk3State::decode(old) != state);
+                self.mk3_raw = Some(raw);
+                if changed {
+                    tracing::debug!(?state, "MK III state changed");
+                    sink(Event::Mk3Changed(state));
+                }
+            }
+            Err(error) if error.is_disconnect() => self.disconnect(sink),
+            Err(error) => tracing::debug!(%error, "MK III poll failed"),
+        }
+    }
+
+    fn refuse_read_only(&self, command: &Command) -> Result<(), EngineError> {
+        let allowed = matches!(
+            command,
+            Command::Detect
+                | Command::ReadMk3
+                | Command::ListPresets
+                | Command::ListBackups
+                | Command::Shutdown
+        );
+        match self
+            .session
+            .as_ref()
+            .and_then(|session| session.device().gen3)
+        {
+            Some(model) if !allowed => Err(EngineError::ReadOnly {
+                model: model.name.to_owned(),
+            }),
+            _ => Ok(()),
         }
     }
 
@@ -212,12 +272,20 @@ impl Engine {
     }
 
     fn run(&mut self, command: Command, sink: &mut dyn FnMut(Event)) -> Result<Event, EngineError> {
+        self.refuse_read_only(&command)?;
         match command {
             Command::Detect => {
                 self.session = None;
                 self.detect().map(Event::Detected)
             }
             Command::ReadTemp => self.session()?.read_temp().map(Event::TempRead),
+            Command::ReadMk3 => {
+                let raw = self.session_any()?.read_mk3(None)?;
+                let state = Mk3State::decode(&raw);
+                self.mk3_raw = Some(raw);
+                self.next_mk3_poll = Some(self.clock.now() + self.timings.mk3_poll);
+                Ok(Event::Mk3Read(state))
+            }
             Command::WriteTemp(image) => self
                 .session()?
                 .write_verified(&image, None, sink)
@@ -268,6 +336,8 @@ impl Engine {
         let session = Session::identify(transport, Arc::clone(&self.clock), self.timings)?;
         let session = self.session.insert(session);
         let device = session.device().clone();
+        self.mk3_raw = None;
+        self.next_mk3_poll = None;
         if !device.is_supported() {
             return Ok(DetectReport {
                 device,
@@ -282,6 +352,18 @@ impl Engine {
             current_channel,
             program_change_map,
         })
+    }
+
+    fn session_any(&mut self) -> Result<&mut Session, EngineError> {
+        if self.session.is_none() && self.lost {
+            return Err(EngineError::Disconnected);
+        }
+        if self.session.is_none() {
+            self.detect()?;
+        }
+        self.session
+            .as_mut()
+            .ok_or(EngineError::NotFound { last: None })
     }
 
     fn session(&mut self) -> Result<&mut Session, EngineError> {

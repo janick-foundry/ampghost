@@ -3,9 +3,11 @@ use std::time::{Duration, Instant};
 
 use katana_midi::MidiTransport;
 use katana_protocol::{
-    Channel, DeviceProfile, Dt1, IDENTITY_REQUEST, Incoming, PatchAssembler, PatchImage,
-    PatchOffset, ProgramChangeMap, ProtocolError, Rq1, decode, parse_current_channel, profile_for,
-    program_change, verify,
+    Channel, DeviceProfile, Dt1, Gen3Rq1, IDENTITY_REQUEST, Incoming, MK3_AMP, MK3_CHANNEL,
+    MK3_COLOURS, MK3_KNOBS, MK3_NAME, MK3_SWITCHES, Mk3Raw, Mk3State, PatchAssembler, PatchImage,
+    PatchOffset, ProgramChangeMap, ProtocolError, Rq1, decode, decode_gen3_data, gen3_model_for,
+    gen3_read_only_allows, mk3_delay_time, parse_current_channel, profile_for, program_change,
+    verify,
 };
 
 use crate::clock::Clock;
@@ -42,8 +44,13 @@ impl Session {
                 continue;
             };
             if let Ok(Incoming::Identity(identity)) = decode(&bytes) {
-                let profile = profile_for(&identity);
-                tracing::info!(%port, %identity, supported = profile.is_some(), "identity reply");
+                let gen3 = gen3_model_for(&identity);
+                let profile = if gen3.is_some() {
+                    None
+                } else {
+                    profile_for(&identity)
+                };
+                tracing::info!(%port, %identity, supported = profile.is_some(), read_only = gen3.is_some(), "identity reply");
                 return Ok(Self {
                     transport,
                     clock,
@@ -52,6 +59,7 @@ impl Session {
                         port,
                         identity,
                         profile,
+                        gen3,
                     },
                     unsolicited: Vec::new(),
                     program_change_ready: None,
@@ -69,9 +77,98 @@ impl Session {
     }
 
     pub(crate) fn profile(&self) -> Result<&'static DeviceProfile, EngineError> {
+        if let Some(model) = self.device.gen3 {
+            return Err(EngineError::ReadOnly {
+                model: model.name.to_owned(),
+            });
+        }
         self.device.profile.ok_or_else(|| EngineError::Unsupported {
             identity: self.device.identity.hex(),
         })
+    }
+
+    fn transmit(&mut self, message: &[u8]) -> Result<(), EngineError> {
+        if let Some(model) = self.device.gen3
+            && !gen3_read_only_allows(message)
+        {
+            tracing::error!(
+                model = model.name,
+                "refusing to send anything but RQ1 to a read-only model"
+            );
+            return Err(EngineError::ReadOnly {
+                model: model.name.to_owned(),
+            });
+        }
+        self.transport.send(message)?;
+        Ok(())
+    }
+
+    fn gen3_read(&mut self, request: Gen3Rq1) -> Result<Vec<u8>, EngineError> {
+        if self.device.gen3.is_none() {
+            return Err(EngineError::NotMk3 {
+                model: self.device.model_name(),
+            });
+        }
+        let quiet = self.clock.now() + self.timings.packet_gap;
+        while self.clock.now() < quiet {
+            let remaining = quiet.saturating_duration_since(self.clock.now());
+            if self.transport.receive(remaining)?.is_none() {
+                break;
+            }
+        }
+        self.transmit(&request.encode())?;
+        let wanted = usize::try_from(request.size().linear()).unwrap_or_default();
+        let deadline = self.clock.now() + self.timings.read_timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(self.clock.now());
+            if remaining.is_zero() {
+                return Err(EngineError::Timeout {
+                    address: request.address(),
+                    received: 0,
+                });
+            }
+            let Some(bytes) = self.transport.receive(remaining)? else {
+                continue;
+            };
+            match decode_gen3_data(&bytes) {
+                Ok(Some((address, data)))
+                    if address == request.address() && data.len() == wanted =>
+                {
+                    return Ok(data);
+                }
+                Ok(_) => {}
+                Err(error) => tracing::warn!(%error, "dropping invalid MK III message"),
+            }
+        }
+    }
+
+    pub(crate) fn read_mk3(&mut self, previous: Option<&Mk3Raw>) -> Result<Mk3Raw, EngineError> {
+        let channel = self
+            .gen3_read(MK3_CHANNEL)?
+            .get(1)
+            .copied()
+            .unwrap_or_default();
+        let colours = self.gen3_read(MK3_COLOURS)?;
+        let amp = self.gen3_read(MK3_AMP)?;
+        let switches = self.gen3_read(MK3_SWITCHES)?;
+        let knobs = self.gen3_read(MK3_KNOBS)?;
+        let mut raw = Mk3Raw {
+            channel,
+            name: Vec::new(),
+            colours,
+            amp,
+            switches,
+            knobs,
+            delay_time: Vec::new(),
+        };
+        raw.delay_time = self.gen3_read(mk3_delay_time(Mk3State::delay_colour(&raw)))?;
+        raw.name = match previous {
+            Some(old) if old.channel == raw.channel && old.colours == raw.colours => {
+                old.name.clone()
+            }
+            _ => self.gen3_read(MK3_NAME)?,
+        };
+        Ok(raw)
     }
 
     pub(crate) fn take_unsolicited(&mut self) -> Vec<Dt1> {
@@ -108,7 +205,7 @@ impl Session {
 
     fn request(&mut self, request: Rq1) -> Result<Vec<Dt1>, EngineError> {
         self.drain(self.timings.pre_request_drain)?;
-        self.transport.send(&request.encode())?;
+        self.transmit(&request.encode())?;
         let start = request.address().linear();
         let end = request.end();
         let deadline = self.clock.now() + self.timings.read_timeout;
@@ -182,7 +279,7 @@ impl Session {
         let request = profile.read_temp_request();
         self.drain(self.timings.pre_request_drain)?;
         self.discard_superseded(request);
-        self.transport.send(&request.encode())?;
+        self.transmit(&request.encode())?;
         let deadline = self.clock.now() + self.timings.read_timeout;
         let mut assembler = PatchAssembler::new(&profile.patch_layout, profile.temp_patch);
         let mut received = 0;
@@ -304,7 +401,7 @@ impl Session {
         }
         for packet in packets {
             tracing::debug!(%packet, "write");
-            self.transport.send(&packet.encode())?;
+            self.transmit(&packet.encode())?;
             self.drain(self.timings.packet_gap)?;
         }
         self.hold_off_program_change();
@@ -433,7 +530,7 @@ impl Session {
         for attempt in 1..=self.timings.channel_attempts {
             self.wait_for_program_change(sink)?;
             sink(Event::Progress(Stage::ProgramChange { program, attempt }));
-            self.transport.send(&program_change(program))?;
+            self.transmit(&program_change(program))?;
             self.hold_off_program_change();
             self.drain(self.timings.channel_settle)?;
             sink(Event::Progress(Stage::ConfirmingChannel { attempt }));
