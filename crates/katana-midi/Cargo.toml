@@ -10,10 +10,11 @@ publish.workspace = true
 
 [features]
 default = ["native"]
-native = ["dep:midir"]
+native = ["dep:midir", "dep:alsa"]
 
 [dependencies]
 midir = { workspace = true, optional = true }
+alsa = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing.workspace = true
 

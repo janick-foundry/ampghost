@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use katana_midi::{MidiBackend, katana_candidates};
+use katana_midi::{MidiBackend, PortInfo, katana_candidates};
 use katana_params::ParamTable;
 use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset, ProtocolError, verify};
 use katana_store::{
@@ -24,6 +25,10 @@ pub struct Engine {
     presets: Box<dyn PresetStorage>,
     backups: Box<dyn PresetStorage>,
     session: Option<Session>,
+    lost: bool,
+    auto_connect: bool,
+    next_port_check: Option<Instant>,
+    probed: HashMap<String, u8>,
 }
 
 impl Engine {
@@ -40,6 +45,85 @@ impl Engine {
             presets,
             backups,
             session: None,
+            lost: false,
+            auto_connect: false,
+            next_port_check: None,
+            probed: HashMap::new(),
+        }
+    }
+
+    pub fn watch_ports(&self, notify: Box<dyn Fn() + Send>) {
+        if let Err(error) = self.backend.watch(notify) {
+            tracing::warn!(%error, "MIDI port announcements unavailable, checking ports periodically");
+        }
+    }
+
+    pub fn ports_changed(&mut self, sink: &mut dyn FnMut(Event)) {
+        self.next_port_check = Some(self.clock.now() + self.timings.port_check);
+        let ports = match self.backend.ports() {
+            Ok(ports) => ports,
+            Err(error) => {
+                tracing::debug!(%error, "listing MIDI ports failed");
+                return;
+            }
+        };
+        if let Some(session) = self.session.as_ref() {
+            let port = session.device().port.clone();
+            let listed = ports.iter().any(|candidate| candidate.name == port);
+            if !listed || !session.is_present() {
+                self.disconnect(sink);
+            }
+            return;
+        }
+        if self.auto_connect {
+            self.connect_new(&ports, sink);
+        }
+    }
+
+    fn disconnect(&mut self, sink: &mut dyn FnMut(Event)) {
+        let Some(session) = self.session.take() else {
+            return;
+        };
+        let port = session.device().port.clone();
+        drop(session);
+        self.lost = true;
+        self.probed.clear();
+        tracing::info!(%port, "Katana disconnected");
+        sink(Event::Disconnected { port });
+    }
+
+    fn connect_new(&mut self, ports: &[PortInfo], sink: &mut dyn FnMut(Event)) {
+        let candidates = katana_candidates(ports);
+        self.probed
+            .retain(|name, _| candidates.iter().any(|port| &port.name == name));
+        for port in candidates {
+            let attempts = self.probed.entry(port.name.clone()).or_insert(0);
+            if *attempts >= self.timings.connect_attempts {
+                continue;
+            }
+            *attempts += 1;
+            tracing::info!(port = %port.name, attempt = *attempts, "new MIDI port, probing for a Katana");
+            match self.probe(&port) {
+                Ok(report) => {
+                    self.lost = false;
+                    self.probed.clear();
+                    let packets = self
+                        .session
+                        .as_mut()
+                        .map(Session::take_unsolicited)
+                        .unwrap_or_default();
+                    for packet in packets {
+                        sink(Event::Unsolicited(packet));
+                    }
+                    tracing::info!(port = %port.name, "Katana connected");
+                    sink(Event::Reconnected(report));
+                    return;
+                }
+                Err(error) => {
+                    self.session = None;
+                    tracing::warn!(port = %port.name, %error, "probe failed");
+                }
+            }
         }
     }
 
@@ -50,7 +134,16 @@ impl Engine {
 
     pub fn handle(&mut self, command: Command, sink: &mut dyn FnMut(Event)) {
         let follow = !matches!(command, Command::Detect | Command::SwitchChannel(_));
+        let detect = matches!(command, Command::Detect);
+        if detect {
+            self.lost = false;
+            self.probed.clear();
+        }
         let result = self.run(command, sink);
+        if detect {
+            self.auto_connect = true;
+        }
+        let gone = result.as_ref().is_err_and(EngineError::is_disconnect);
         let packets = self
             .session
             .as_mut()
@@ -71,18 +164,32 @@ impl Engine {
                 sink(Event::Failed(error));
             }
         }
+        if gone {
+            self.disconnect(sink);
+            return;
+        }
         self.forward_unsolicited(deferred, sink);
     }
 
     pub fn poll(&mut self, window: Duration, sink: &mut dyn FnMut(Event)) {
-        let Some(session) = self.session.as_mut() else {
-            return;
-        };
-        if let Err(error) = session.drain(window) {
-            tracing::debug!(%error, "idle poll failed");
+        if let Some(session) = self.session.as_mut() {
+            match session.drain(window) {
+                Err(error) if error.is_disconnect() => {
+                    self.disconnect(sink);
+                    return;
+                }
+                Err(error) => tracing::debug!(%error, "idle poll failed"),
+                Ok(()) => {}
+            }
+            let packets = session.take_unsolicited();
+            self.forward_unsolicited(packets, sink);
         }
-        let packets = session.take_unsolicited();
-        self.forward_unsolicited(packets, sink);
+        let due = self
+            .next_port_check
+            .is_none_or(|next| self.clock.now() >= next);
+        if due && (self.session.is_some() || self.auto_connect) {
+            self.ports_changed(sink);
+        }
     }
 
     fn forward_unsolicited(&mut self, packets: Vec<Dt1>, sink: &mut dyn FnMut(Event)) {
@@ -139,33 +246,11 @@ impl Engine {
         let mut last = None;
         for port in candidates {
             tracing::info!(port = %port.name, "probing");
-            let attempt = self
-                .backend
-                .open(&port)
-                .map_err(EngineError::from)
-                .and_then(|transport| {
-                    Session::identify(transport, Arc::clone(&self.clock), self.timings)
-                });
-            match attempt {
-                Ok(session) => {
-                    let session = self.session.insert(session);
-                    let device = session.device().clone();
-                    if !device.is_supported() {
-                        return Ok(DetectReport {
-                            device,
-                            current_channel: None,
-                            program_change_map: None,
-                        });
-                    }
-                    let current_channel = Some(session.read_current_channel()?);
-                    let program_change_map = Some(session.read_program_change_map()?);
-                    return Ok(DetectReport {
-                        device,
-                        current_channel,
-                        program_change_map,
-                    });
-                }
+            match self.probe(&port) {
+                Ok(report) => return Ok(report),
+                Err(error) if error.is_disconnect() => return Err(error),
                 Err(error) => {
+                    self.session = None;
                     tracing::warn!(port = %port.name, %error, "probe failed");
                     last = Some(error.to_string());
                 }
@@ -174,7 +259,31 @@ impl Engine {
         Err(EngineError::NotFound { last })
     }
 
+    fn probe(&mut self, port: &PortInfo) -> Result<DetectReport, EngineError> {
+        let transport = self.backend.open(port)?;
+        let session = Session::identify(transport, Arc::clone(&self.clock), self.timings)?;
+        let session = self.session.insert(session);
+        let device = session.device().clone();
+        if !device.is_supported() {
+            return Ok(DetectReport {
+                device,
+                current_channel: None,
+                program_change_map: None,
+            });
+        }
+        let current_channel = Some(session.read_current_channel()?);
+        let program_change_map = Some(session.read_program_change_map()?);
+        Ok(DetectReport {
+            device,
+            current_channel,
+            program_change_map,
+        })
+    }
+
     fn session(&mut self) -> Result<&mut Session, EngineError> {
+        if self.session.is_none() && self.lost {
+            return Err(EngineError::Disconnected);
+        }
         if self.session.is_none() {
             self.detect()?;
         }

@@ -141,6 +141,10 @@ pub enum Event {
     Backups(Vec<String>),
     Unsolicited(Dt1),
     AmpSwitched(AmpSwitch),
+    Disconnected {
+        port: String,
+    },
+    Reconnected(DetectReport),
     Failed(EngineError),
     ShutDown,
 }
@@ -149,7 +153,11 @@ impl Event {
     pub fn is_terminal(&self) -> bool {
         !matches!(
             self,
-            Self::Progress(_) | Self::Unsolicited(_) | Self::AmpSwitched(_)
+            Self::Progress(_)
+                | Self::Unsolicited(_)
+                | Self::AmpSwitched(_)
+                | Self::Disconnected { .. }
+                | Self::Reconnected(_)
         )
     }
 }

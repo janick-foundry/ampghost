@@ -33,8 +33,20 @@ pub enum EngineError {
     },
     #[error("stored preset is not valid UTF-8")]
     PresetEncoding,
+    #[error("the Katana was disconnected")]
+    Disconnected,
     #[error("engine thread is not running")]
     Stopped,
+}
+
+impl EngineError {
+    pub fn is_disconnect(&self) -> bool {
+        match self {
+            Self::Disconnected => true,
+            Self::Midi(error) => error.is_disconnect(),
+            _ => false,
+        }
+    }
 }
 
 fn last_reason(last: Option<&str>) -> String {

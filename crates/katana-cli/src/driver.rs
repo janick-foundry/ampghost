@@ -108,6 +108,12 @@ impl Driver {
                     from_dump = switch.from_dump,
                     "amp switched channel"
                 ),
+                Event::Reconnected(report) => {
+                    tracing::info!(model = %report.device.model_name(), "Katana connected");
+                }
+                Event::Disconnected { port } => {
+                    return Err(anyhow!("Katana on {port} disconnected"));
+                }
                 Event::Failed(error) => return Err(error.into()),
                 other => return Ok(other),
             }

@@ -9,6 +9,14 @@ pub enum MidiError {
     Connect { port: String, reason: String },
     #[error("sending MIDI failed: {0}")]
     Send(String),
+    #[error("MIDI port {0} disappeared")]
+    PortGone(String),
     #[error("MIDI input closed")]
     Disconnected,
+}
+
+impl MidiError {
+    pub fn is_disconnect(&self) -> bool {
+        matches!(self, Self::PortGone(_) | Self::Disconnected)
+    }
 }

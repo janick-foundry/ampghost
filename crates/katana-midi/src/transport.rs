@@ -17,12 +17,21 @@ pub trait MidiTransport: Send {
     fn send(&mut self, message: &[u8]) -> Result<(), MidiError>;
 
     fn receive(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>, MidiError>;
+
+    fn is_present(&self) -> bool {
+        true
+    }
 }
 
 pub trait MidiBackend: Send {
     fn ports(&self) -> Result<Vec<PortInfo>, MidiError>;
 
     fn open(&self, port: &PortInfo) -> Result<Box<dyn MidiTransport>, MidiError>;
+
+    fn watch(&self, notify: Box<dyn Fn() + Send>) -> Result<(), MidiError> {
+        drop(notify);
+        Err(MidiError::Init("port watching is not available".to_owned()))
+    }
 }
 
 pub fn katana_candidates(ports: &[PortInfo]) -> Vec<PortInfo> {

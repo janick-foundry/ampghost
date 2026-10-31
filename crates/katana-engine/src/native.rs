@@ -118,20 +118,29 @@ impl PresetStorage for FileStorage {
     }
 }
 
+enum Message {
+    Command(Command),
+    PortsChanged,
+}
+
 pub struct EngineHandle {
-    commands: mpsc::Sender<Command>,
+    commands: mpsc::Sender<Message>,
     thread: Option<thread::JoinHandle<()>>,
 }
 
 impl EngineHandle {
     pub fn send(&self, command: Command) -> Result<(), EngineError> {
         self.commands
-            .send(command)
+            .send(Message::Command(command))
             .map_err(|_| EngineError::Stopped)
     }
 
     pub fn shutdown(mut self) {
-        if self.commands.send(Command::Shutdown).is_err() {
+        if self
+            .commands
+            .send(Message::Command(Command::Shutdown))
+            .is_err()
+        {
             tracing::debug!("engine already stopped");
         }
         if let Some(thread) = self.thread.take()
@@ -146,19 +155,26 @@ pub fn spawn(
     mut engine: Engine,
     mut sink: Box<dyn FnMut(Event) + Send>,
 ) -> std::io::Result<EngineHandle> {
-    let (commands, receiver) = mpsc::channel::<Command>();
+    let (commands, receiver) = mpsc::channel::<Message>();
+    let notifier = commands.clone();
+    engine.watch_ports(Box::new(move || {
+        if notifier.send(Message::PortsChanged).is_err() {
+            tracing::debug!("engine gone, ignoring port change");
+        }
+    }));
     let thread = thread::Builder::new()
         .name("katana-engine".to_owned())
         .spawn(move || {
             loop {
                 match receiver.recv_timeout(IDLE_POLL_INTERVAL) {
-                    Ok(command) => {
+                    Ok(Message::Command(command)) => {
                         let stop = matches!(command, Command::Shutdown);
                         engine.handle(command, &mut *sink);
                         if stop {
                             break;
                         }
                     }
+                    Ok(Message::PortsChanged) => engine.ports_changed(&mut *sink),
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         engine.poll(IDLE_POLL_WINDOW, &mut *sink);
                     }

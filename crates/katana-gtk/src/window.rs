@@ -9,10 +9,12 @@ use anyhow::{Context, Result};
 use gtk::{gio, glib};
 use katana_engine::{
     AmpSwitch, ChainOutcome, Command, DetectReport, DeviceInfo, EngineError, EngineHandle, Event,
-    ParamWrite, PresetEntry, Stage,
+    ParamWrite, PresetEntry, Stage, WriteOutcome, apply_param_writes,
 };
 use katana_params::ParamTable;
-use katana_protocol::{Channel, Dt1, PatchImage, PatchOffset, parse_current_channel};
+use katana_protocol::{
+    Channel, DeviceProfile, Dt1, PatchImage, PatchOffset, parse_current_channel,
+};
 
 use crate::blocks::{self, BlockSpec, Variant};
 use crate::bridge;
@@ -32,6 +34,7 @@ type MoveTarget = Rc<dyn Fn(&Ui) -> Option<&'static str>>;
 enum FollowUp {
     ApplyPreset { key: String, name: String },
     Restore { key: String },
+    PutBack(PatchImage),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +48,7 @@ enum Job {
     Restore,
     SavePreset,
     ApplyPreset(String),
+    PutBack,
     ListPresets,
     ListBackups,
 }
@@ -69,6 +73,7 @@ impl Job {
             Self::Restore => tr("Restoring backup…"),
             Self::SavePreset => tr("Saving preset…"),
             Self::ApplyPreset(name) => trf("Applying “{name}”…", &[("name", name)]),
+            Self::PutBack => tr("Putting your edits back…"),
             Self::ListPresets | Self::ListBackups => String::new(),
         }
     }
@@ -84,6 +89,13 @@ struct Model {
     selected: &'static str,
     pending_switch: Option<Channel>,
     failed_detect: bool,
+    held: Option<Held>,
+    lost_edits: Option<PatchImage>,
+}
+
+struct Held {
+    image: PatchImage,
+    baseline: Option<PatchImage>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -271,6 +283,7 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         Box::new(|ui| ui.send(Command::Detect, Job::Detect)),
     );
     simple("backup", Box::new(|ui| ui.backup_temp()));
+    simple("put-back-edits", Box::new(|ui| ui.put_back_edits()));
     simple(
         "restore",
         Box::new(|ui| ui.send(Command::ListBackups, Job::ListBackups)),
@@ -1063,18 +1076,13 @@ impl Ui {
             Event::Unsolicited(packet) => self.apply_unsolicited(&packet),
             Event::AmpSwitched(switch) => self.follow_amp_switch(switch),
             Event::Detected(report) => self.on_detected(report),
-            Event::TempRead(image) => self.set_image(image),
-            Event::WriteVerified(outcome) => {
-                if outcome.attempts > 1 {
-                    self.toast(&tr("Write verified after a retry"));
-                }
-                tracing::info!(
-                    attempts = outcome.attempts,
-                    packets = outcome.packets,
-                    "write verified"
-                );
-                self.adopt_image(outcome.image);
+            Event::Reconnected(report) => self.on_reconnected(report),
+            Event::Disconnected { port } => self.on_disconnected(&port),
+            Event::TempRead(image) => {
+                self.set_image(image);
+                self.reconcile_held();
             }
+            Event::WriteVerified(outcome) => self.on_write_verified(job.as_ref(), outcome),
             Event::ChainWritten(outcome) => self.on_chain_written(job.as_ref(), outcome),
             Event::ChannelSwitched(outcome) => {
                 self.model.borrow_mut().channel = Some(outcome.channel);
@@ -1180,6 +1188,10 @@ impl Ui {
     }
 
     fn on_failed(self: &Rc<Self>, job: Option<Job>, error: &EngineError) {
+        if error.is_disconnect() {
+            tracing::info!(?job, %error, "cancelled, the Katana is gone");
+            return;
+        }
         tracing::warn!(?job, %error, "command failed");
         match (job, error) {
             (_, EngineError::NotFound { .. }) | (Some(Job::Detect), _) => {
@@ -1232,6 +1244,112 @@ impl Ui {
         }
     }
 
+    fn on_write_verified(&self, job: Option<&Job>, outcome: WriteOutcome) {
+        if job == Some(&Job::PutBack) {
+            self.model.borrow_mut().lost_edits = None;
+        }
+        if outcome.attempts > 1 {
+            self.toast(&tr("Write verified after a retry"));
+        }
+        tracing::info!(
+            attempts = outcome.attempts,
+            packets = outcome.packets,
+            "write verified"
+        );
+        self.adopt_image(outcome.image);
+    }
+
+    fn on_reconnected(self: &Rc<Self>, report: DetectReport) {
+        self.toast(&trf(
+            "{model} connected",
+            &[("model", &report.device.model_name())],
+        ));
+        self.on_detected(report);
+        self.refresh_all();
+    }
+
+    fn on_disconnected(self: &Rc<Self>, port: &str) {
+        tracing::info!(%port, "Katana disconnected, keeping unsaved edits");
+        self.cancel_write_timers();
+        let mut writes = std::mem::take(&mut *self.in_flight.borrow_mut());
+        writes.extend(std::mem::take(&mut *self.pending.borrow_mut()));
+        {
+            let mut model = self.model.borrow_mut();
+            let profile = model.device.as_ref().and_then(|device| device.profile);
+            if let Some(image) = model.image.take() {
+                let writes = writes
+                    .into_iter()
+                    .map(|(id, value)| ParamWrite {
+                        id: id.to_owned(),
+                        value,
+                    })
+                    .collect::<Vec<_>>();
+                let links = profile.map_or(&[][..], |profile| profile.verify_rules.linked_types);
+                let image = apply_param_writes(self.table, &image, &writes, links).unwrap_or(image);
+                let baseline = model.baseline.take();
+                if model.held.is_none() {
+                    model.held = Some(Held { image, baseline });
+                }
+            }
+            model.device = None;
+            model.channel = None;
+            model.image = None;
+            model.baseline = None;
+            model.pending_switch = None;
+            model.failed_detect = true;
+        }
+        self.toast(&tr("Katana disconnected"));
+        self.end_status();
+        self.refresh_all();
+    }
+
+    fn reconcile_held(self: &Rc<Self>) {
+        let Some(held) = self.model.borrow_mut().held.take() else {
+            return;
+        };
+        let profile = self.profile();
+        let mut model = self.model.borrow_mut();
+        let Some(current) = model.image.as_ref() else {
+            model.held = Some(held);
+            return;
+        };
+        let edited = held
+            .baseline
+            .as_ref()
+            .is_some_and(|baseline| editable_differs(profile, &held.image, baseline));
+        if !editable_differs(profile, &held.image, current) {
+            tracing::info!(edited, "amp kept the temp across the reconnect");
+            if let Some(baseline) = held.baseline {
+                model.baseline = Some(baseline);
+            }
+            return;
+        }
+        if !edited {
+            tracing::info!("amp temp changed while disconnected, nothing unsaved was lost");
+            return;
+        }
+        tracing::info!("amp lost the unsaved edits, offering to put them back");
+        model.lost_edits = Some(held.image);
+        drop(model);
+        let toast = adw::Toast::builder()
+            .title(tr("The amp no longer has your unsaved edits"))
+            .button_label(tr("Put Back"))
+            .action_name("win.put-back-edits")
+            .timeout(0)
+            .build();
+        self.toasts.add_toast(toast);
+    }
+
+    fn put_back_edits(&self) {
+        if !self.can_write() || self.is_busy() {
+            return;
+        }
+        let image = self.model.borrow().lost_edits.clone();
+        if let Some(image) = image {
+            self.backup_then(FollowUp::PutBack(image));
+        }
+    }
+
     fn on_preset_saved(&self, name: &str) {
         {
             let mut model = self.model.borrow_mut();
@@ -1254,7 +1372,7 @@ impl Ui {
         model.image = Some(image);
     }
 
-    fn profile(&self) -> Option<&'static katana_protocol::DeviceProfile> {
+    fn profile(&self) -> Option<&'static DeviceProfile> {
         self.model
             .borrow()
             .device
@@ -1414,11 +1532,7 @@ impl Ui {
         let model = self.model.borrow();
         let profile = model.device.as_ref().and_then(|device| device.profile);
         match (&model.image, &model.baseline) {
-            (Some(image), Some(baseline)) => {
-                image.differing_offsets(baseline).iter().any(|offset| {
-                    profile.is_none_or(|profile| !profile.verify_rules.is_amp_derived(*offset))
-                })
-            }
+            (Some(image), Some(baseline)) => editable_differs(profile, image, baseline),
             _ => false,
         }
     }
@@ -1610,6 +1724,7 @@ impl Ui {
         let reason = match follow_up {
             FollowUp::ApplyPreset { .. } => "preset",
             FollowUp::Restore { .. } => "restore",
+            FollowUp::PutBack(_) => "put-back",
         };
         let key = format!("auto-before-{reason}-{}.syx", Self::timestamp());
         self.send(
@@ -1626,6 +1741,7 @@ impl Ui {
                 self.send(Command::ApplyPreset { key }, Job::ApplyPreset(name));
             }
             FollowUp::Restore { key } => self.send(Command::RestoreBackup { key }, Job::Restore),
+            FollowUp::PutBack(image) => self.send(Command::WriteTemp(image), Job::PutBack),
         }
     }
 
@@ -2317,6 +2433,17 @@ fn parse_hex(text: &str) -> Option<Vec<u8>> {
     text.split_whitespace()
         .map(|word| u8::from_str_radix(word, 16).ok())
         .collect()
+}
+
+fn editable_differs(
+    profile: Option<&'static DeviceProfile>,
+    image: &PatchImage,
+    other: &PatchImage,
+) -> bool {
+    image
+        .differing_offsets(other)
+        .iter()
+        .any(|offset| profile.is_none_or(|profile| !profile.verify_rules.is_amp_derived(*offset)))
 }
 
 fn writable(model: &Model) -> bool {

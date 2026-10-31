@@ -60,6 +60,10 @@ impl Session {
         }
     }
 
+    pub(crate) fn is_present(&self) -> bool {
+        self.transport.is_present()
+    }
+
     pub(crate) fn device(&self) -> &DeviceInfo {
         &self.device
     }

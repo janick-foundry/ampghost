@@ -13,6 +13,8 @@ pub struct Timings {
     pub dump_quiet: Duration,
     pub dump_limit: Duration,
     pub read_attempts: u8,
+    pub port_check: Duration,
+    pub connect_attempts: u8,
 }
 
 impl Default for Timings {
@@ -29,6 +31,8 @@ impl Default for Timings {
             dump_quiet: Duration::from_millis(500),
             dump_limit: Duration::from_millis(3000),
             read_attempts: 2,
+            port_check: Duration::from_secs(3),
+            connect_attempts: 3,
         }
     }
 }
