@@ -501,7 +501,7 @@ pub fn block_params(
     };
     table
         .iter()
-        .filter(|param| param.area() == Area::Patch)
+        .filter(|param| param.area() == Area::Patch && !param.is_hidden())
         .filter(|param| spec.param_blocks.contains(&param.block()))
         .filter(|param| {
             let id = Some(param.id());

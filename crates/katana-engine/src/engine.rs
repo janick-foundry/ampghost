@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use katana_midi::{MidiBackend, PortInfo, katana_candidates};
-use katana_params::ParamTable;
+use katana_params::{ParamTable, ParamsError};
 use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset, ProtocolError, verify};
 use katana_store::{
     Preset, PresetStorage, decode_preset, decode_syx, encode_preset, encode_syx, preset_key,
@@ -484,6 +484,9 @@ pub fn apply_param_writes(
     let mut target = current.clone();
     for write in writes {
         let param = table.get(&write.id)?;
+        if param.is_hidden() {
+            return Err(ParamsError::Hidden(write.id.clone()).into());
+        }
         let offset = param.patch_offset()?;
         for (distance, byte) in (0_u32..).zip(param.encode(write.value)?) {
             target.set(offset.plus(distance), byte)?;

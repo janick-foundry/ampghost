@@ -58,6 +58,8 @@ pub(crate) struct RawParam {
     pub(crate) size: u8,
     #[serde(flatten)]
     pub(crate) kind: ParamKind,
+    #[serde(default)]
+    pub(crate) hidden: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -101,6 +103,10 @@ impl Param {
 
     pub fn kind(&self) -> &ParamKind {
         &self.raw.kind
+    }
+
+    pub fn is_hidden(&self) -> bool {
+        self.raw.hidden
     }
 
     pub fn status(&self) -> &Status {
