@@ -812,6 +812,9 @@ impl Ui {
                 self.toast(&trf("Restored {key} to temp", &[("key", &key)]));
             }
             Event::PresetSaved { name, .. } => self.on_preset_saved(&name),
+            Event::PresetUpdated { .. } | Event::PresetDeleted { .. } => {
+                self.send(Command::ListPresets, Job::ListPresets);
+            }
             Event::PresetApplied { name, outcome, .. } => {
                 self.set_clean_image(outcome.image);
                 let text = if outcome.attempts > 1 {

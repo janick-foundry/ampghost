@@ -17,6 +17,8 @@ pub enum StoreError {
     NotFound(String),
     #[error("storage failure: {0}")]
     Storage(String),
+    #[error("{0} already exists in storage")]
+    AlreadyExists(String),
     #[error("preset name must be 1 to 64 printable characters")]
     InvalidName,
 }

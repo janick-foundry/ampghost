@@ -116,6 +116,16 @@ impl PresetStorage for FileStorage {
         tracing::info!(path = %path.display(), bytes = bytes.len(), "stored");
         Ok(())
     }
+
+    fn delete(&mut self, key: &str) -> Result<(), StoreError> {
+        let path = self.path(key)?;
+        fs::remove_file(&path).map_err(|error| match error.kind() {
+            ErrorKind::NotFound => StoreError::NotFound(path.display().to_string()),
+            _ => storage_error(&error),
+        })?;
+        tracing::info!(path = %path.display(), "deleted");
+        Ok(())
+    }
 }
 
 enum Message {

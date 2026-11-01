@@ -20,6 +20,8 @@ pub enum Command {
     RestoreBackup { key: String },
     SavePreset { name: String },
     ApplyPreset { key: String },
+    UpdatePreset { key: String, name: String },
+    DeletePreset { key: String },
     ListPresets,
     ListBackups,
     Shutdown,
@@ -132,6 +134,14 @@ pub enum Event {
     PresetSaved {
         key: String,
         name: String,
+    },
+    PresetUpdated {
+        previous: String,
+        key: String,
+        name: String,
+    },
+    PresetDeleted {
+        key: String,
     },
     PresetApplied {
         key: String,

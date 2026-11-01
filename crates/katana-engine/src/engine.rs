@@ -6,8 +6,8 @@ use katana_midi::{MidiBackend, PortInfo, katana_candidates};
 use katana_params::{ParamTable, ParamsError};
 use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset, ProtocolError, verify};
 use katana_store::{
-    Preset, PresetStorage, decode_preset, decode_syx, encode_preset, encode_syx, preset_key,
-    read_preset_summary, validate_key,
+    Preset, PresetStorage, StoreError, decode_preset, decode_syx, encode_preset, encode_syx,
+    preset_key, read_preset_summary, validate_key,
 };
 
 use crate::clock::Clock;
@@ -232,6 +232,12 @@ impl Engine {
             Command::RestoreBackup { key } => self.restore_backup(key, sink),
             Command::SavePreset { name } => self.save_preset(name),
             Command::ApplyPreset { key } => self.apply_preset(key, sink),
+            Command::UpdatePreset { key, name } => self.update_preset(key, name),
+            Command::DeletePreset { key } => {
+                validate_key(&key)?;
+                self.presets.delete(&key)?;
+                Ok(Event::PresetDeleted { key })
+            }
             Command::ListPresets => self.list_presets().map(Event::Presets),
             Command::ListBackups => Ok(Event::Backups(self.backups.list()?)),
             Command::Shutdown => {
@@ -452,11 +458,39 @@ impl Engine {
         let timestamp = self.clock.timestamp();
         let session = self.session()?;
         let profile = session.profile()?;
-        let image = session.read_temp()?;
+        let mut image = session.read_temp()?;
+        katana_params::conform_to_official(&mut image)?;
         let preset = Preset::new(name.clone(), profile.name, timestamp, image)?;
         let text = encode_preset(&preset, profile.temp_patch)?;
         self.presets.write(&key, text.as_bytes())?;
         Ok(Event::PresetSaved { key, name })
+    }
+
+    fn update_preset(&mut self, previous: String, name: String) -> Result<Event, EngineError> {
+        validate_key(&previous)?;
+        let existing = String::from_utf8(self.presets.read(&previous)?)
+            .map_err(|_| EngineError::PresetEncoding)?;
+        let created = read_preset_summary(&existing)
+            .map_or_else(|_| self.clock.timestamp(), |summary| summary.created);
+        let key = preset_key(&name)?;
+        if key != previous && self.presets.list()?.contains(&key) {
+            return Err(StoreError::AlreadyExists(key).into());
+        }
+        let session = self.session()?;
+        let profile = session.profile()?;
+        let mut image = session.read_temp()?;
+        katana_params::conform_to_official(&mut image)?;
+        let preset = Preset::new(name.clone(), profile.name, created, image)?;
+        let text = encode_preset(&preset, profile.temp_patch)?;
+        self.presets.write(&key, text.as_bytes())?;
+        if key != previous {
+            self.presets.delete(&previous)?;
+        }
+        Ok(Event::PresetUpdated {
+            previous,
+            key,
+            name,
+        })
     }
 
     fn apply_preset(

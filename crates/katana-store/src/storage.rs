@@ -6,6 +6,8 @@ pub trait PresetStorage: Send {
     fn read(&self, key: &str) -> Result<Vec<u8>, StoreError>;
 
     fn write(&mut self, key: &str, bytes: &[u8]) -> Result<(), StoreError>;
+
+    fn delete(&mut self, key: &str) -> Result<(), StoreError>;
 }
 
 pub fn validate_key(key: &str) -> Result<(), StoreError> {
