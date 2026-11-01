@@ -169,13 +169,10 @@ impl Driver {
                     other => bail!("unexpected engine event {other:?}"),
                 }
             }
-            Action::WriteChain { order } => {
-                let order = parse_chain(&order)?;
-                match self.request(Command::WriteChain(order))? {
-                    Event::ChainWritten(outcome) => print_chain_outcome(&outcome),
-                    other => bail!("unexpected engine event {other:?}"),
-                }
-            }
+            Action::WriteChain { pattern } => match self.request(Command::WriteChain(pattern))? {
+                Event::ChainWritten(outcome) => print_chain_outcome(&outcome),
+                other => bail!("unexpected engine event {other:?}"),
+            },
             Action::ReadParam { id } => self.read_param(&id)?,
             Action::WriteParam { id, value } => {
                 match self.request(Command::WriteParams(vec![ParamWrite { id, value }]))? {
@@ -389,17 +386,6 @@ fn read_value(param: &Param, image: &PatchImage) -> Result<u16> {
         .collect::<Option<Vec<u8>>>()
         .context("parameter lies outside the patch data")?;
     Ok(param.decode(&bytes)?)
-}
-
-fn parse_chain(words: &[String]) -> Result<Vec<u8>> {
-    words
-        .iter()
-        .flat_map(|word| word.split([' ', ',']))
-        .filter(|word| !word.is_empty())
-        .map(|word| {
-            u8::from_str_radix(word, 16).with_context(|| format!("{word:?} is not a hex byte"))
-        })
-        .collect()
 }
 
 fn default_backup_key() -> String {

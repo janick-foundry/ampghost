@@ -159,17 +159,6 @@
   color: color-mix(in srgb, currentColor 70%, transparent);
 }
 
-.chain-node.dragging {
-  opacity: 0.35;
-}
-
-.drop-indicator {
-  min-width: 4px;
-  margin: 6px 0;
-  border-radius: 2px;
-  background-color: var(--accent-bg-color);
-}
-
 .detail-sheet {
   background-color: var(--window-bg-color);
   background-image: linear-gradient(var(--card-bg-color), var(--card-bg-color));
@@ -268,16 +257,6 @@
 .navigation-sidebar.preset-list > row.preset-row > box.header {
   margin-left: 9px;
   margin-right: 9px;
-}
-
-.node-handle {
-  opacity: 0.45;
-  transition: opacity 150ms ease;
-}
-
-.chain-node:hover .node-handle,
-.chain-node:focus-visible .node-handle {
-  opacity: 1;
 }
 
 .preset-apply {

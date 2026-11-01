@@ -78,71 +78,32 @@ impl DeviceProfile {
             .collect()
     }
 
-    pub fn validate_chain(&self, order: &[u8]) -> Result<(), ProtocolError> {
-        let expected = usize::try_from(self.write_order.effect_chain.len()).unwrap_or_default();
-        let mut seen = vec![false; expected];
-        let valid = order.len() == expected
-            && order.iter().all(|&block| {
-                seen.get_mut(usize::from(block))
-                    .is_some_and(|slot| !std::mem::replace(slot, true))
-            });
-        if !valid {
-            return Err(ProtocolError::InvalidChain {
-                expected,
-                order: order.to_vec(),
-            });
-        }
-        self.chain_pattern_for(order)
-            .map(|_| ())
-            .ok_or_else(|| ProtocolError::UnofficialChain {
-                order: order.to_vec(),
-            })
+    pub fn chain_pattern_of(&self, image: &PatchImage) -> Option<u8> {
+        image
+            .get(self.chain_pattern)
+            .filter(|&pattern| usize::from(pattern) < self.chain_patterns.len())
     }
 
-    pub fn chain_pattern_for(&self, order: &[u8]) -> Option<u8> {
-        let blocks = self.chain_patterns.first()?;
-        let placed = order
-            .iter()
-            .copied()
-            .filter(|block| blocks.contains(block))
-            .collect::<Vec<_>>();
-        self.chain_patterns
-            .iter()
-            .position(|pattern| pattern.as_slice() == placed.as_slice())
-            .and_then(|index| u8::try_from(index).ok())
-    }
-
-    pub fn with_chain(
+    pub fn with_chain_pattern(
         &self,
         image: &PatchImage,
-        order: &[u8],
+        pattern: u8,
     ) -> Result<PatchImage, ProtocolError> {
-        self.validate_chain(order)?;
-        let pattern =
-            self.chain_pattern_for(order)
-                .ok_or_else(|| ProtocolError::UnofficialChain {
-                    order: order.to_vec(),
-                })?;
-        let mut target = image.clone();
-        for (offset, &block) in self.write_order.effect_chain.offsets().zip(order) {
-            target.set(offset, block)?;
+        if usize::from(pattern) >= self.chain_patterns.len() {
+            return Err(ProtocolError::InvalidChainPattern {
+                pattern,
+                count: self.chain_patterns.len(),
+            });
         }
+        let mut target = image.clone();
         target.set(self.chain_pattern, pattern)?;
         Ok(target)
     }
 
     pub fn chain_write_plan(&self, image: &PatchImage) -> Result<Vec<Dt1>, ProtocolError> {
-        let span = self.write_order.effect_chain;
-        let order = self
-            .chain_order(image)
-            .ok_or(ProtocolError::OutsideLayout(span.start().linear()))?;
-        self.validate_chain(&order)?;
         let pattern = self
-            .chain_pattern_for(&order)
-            .ok_or(ProtocolError::UnofficialChain { order })?;
-        if image.get(self.chain_pattern) != Some(pattern) {
-            return Err(ProtocolError::OutsideLayout(self.chain_pattern.linear()));
-        }
+            .chain_pattern_of(image)
+            .ok_or(ProtocolError::OutsideLayout(self.chain_pattern.linear()))?;
         let packet = Dt1::new(self.chain_pattern.address(self.temp_patch)?, [pattern])?;
         self.checked(vec![packet])
     }

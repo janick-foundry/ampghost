@@ -38,8 +38,8 @@ pub enum Action {
         file: PathBuf,
     },
     WriteChain {
-        #[arg(value_name = "HEX", required = true)]
-        order: Vec<String>,
+        #[arg(value_name = "PATTERN", value_parser = clap::value_parser!(u8).range(0..=6))]
+        pattern: u8,
     },
     ReadParam {
         id: String,

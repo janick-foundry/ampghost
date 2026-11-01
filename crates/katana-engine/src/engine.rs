@@ -221,7 +221,9 @@ impl Engine {
             Command::WriteParams(writes) => {
                 self.write_params(&writes, sink).map(Event::WriteVerified)
             }
-            Command::WriteChain(order) => self.write_chain(order, sink).map(Event::ChainWritten),
+            Command::WriteChain(pattern) => {
+                self.write_chain(pattern, sink).map(Event::ChainWritten)
+            }
             Command::SwitchChannel(channel) => self
                 .session()?
                 .switch_channel(channel, sink)
@@ -319,57 +321,62 @@ impl Engine {
 
     fn write_chain(
         &mut self,
-        order: Vec<u8>,
+        pattern: u8,
         sink: &mut dyn FnMut(Event),
     ) -> Result<ChainOutcome, EngineError> {
         let session = self.session()?;
         let profile = session.profile()?;
-        profile.validate_chain(&order)?;
         let chain_start = profile.write_order.effect_chain.start().linear();
+        let pattern_at = profile.chain_pattern.linear();
         let current = session.read_temp()?;
+        let target = profile.with_chain_pattern(&current, pattern)?;
         let previous = profile
-            .chain_order(&current)
-            .ok_or(ProtocolError::OutsideLayout(chain_start))?;
-        if previous == order {
+            .chain_pattern_of(&current)
+            .ok_or(ProtocolError::OutsideLayout(pattern_at))?;
+        if previous == pattern {
             return Ok(ChainOutcome {
-                actual: previous.clone(),
                 previous,
-                requested: order,
+                requested: pattern,
+                actual: previous,
+                order: profile
+                    .chain_order(&current)
+                    .ok_or(ProtocolError::OutsideLayout(chain_start))?,
                 packets: 0,
                 report: katana_protocol::VerifyReport::default(),
                 image: current,
             });
         }
-        let target = profile.with_chain(&current, &order)?;
-        tracing::info!(from = %hex(&previous), to = %hex(&order), "writing effect chain");
+        tracing::info!(from = previous, to = pattern, "writing chain pattern");
         let (packets, image) = session.write_chain(&target, sink)?;
         let actual = profile
+            .chain_pattern_of(&image)
+            .ok_or(ProtocolError::OutsideLayout(pattern_at))?;
+        let order = profile
             .chain_order(&image)
             .ok_or(ProtocolError::OutsideLayout(chain_start))?;
         let report = verify(&target, &image, &profile.verify_rules);
-        if actual == order {
-            tracing::info!(packets, "effect chain verified");
+        if actual == pattern {
+            tracing::info!(packets, order = %hex(&order), "chain pattern verified");
         } else {
             tracing::warn!(
-                requested = %hex(&order),
-                actual = %hex(&actual),
-                "amp normalised the effect chain"
+                requested = pattern,
+                actual,
+                "amp did not keep the chain pattern"
             );
         }
-        let span = profile.write_order.effect_chain;
-        let elsewhere = report
-            .mismatches
-            .iter()
-            .filter(|mismatch| !span.contains(mismatch.offset))
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        if !elsewhere.is_empty() {
-            tracing::warn!(bytes = elsewhere.len(), differing = %elsewhere.join(", "), "amp changed other bytes after the chain write");
+        if !report.is_ok() {
+            let differing = report
+                .mismatches
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>();
+            tracing::warn!(bytes = differing.len(), differing = %differing.join(", "), "amp changed other bytes after the chain write");
         }
         Ok(ChainOutcome {
             previous,
-            requested: order,
+            requested: pattern,
             actual,
+            order,
             packets,
             report,
             image,

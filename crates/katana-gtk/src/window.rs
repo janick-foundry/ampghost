@@ -13,7 +13,7 @@ use katana_engine::{
 };
 use katana_params::ParamTable;
 use katana_protocol::{
-    Channel, DeviceProfile, Dt1, PatchImage, PatchOffset, parse_current_channel,
+    Channel, DeviceProfile, Dt1, KATANA_50_MK2, PatchImage, PatchOffset, parse_current_channel,
 };
 
 use crate::blocks::{self, BlockSpec, Variant};
@@ -28,7 +28,6 @@ const STATUS_DELAY: Duration = Duration::from_millis(300);
 const TOGGLE_FADE: u32 = 250;
 
 type Handler = Box<dyn Fn(&Rc<Ui>)>;
-type MoveTarget = Rc<dyn Fn(&Ui) -> Option<&'static str>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum FollowUp {
@@ -63,7 +62,7 @@ impl Job {
             Self::Detect => tr("Looking for Katana…"),
             Self::ReadTemp => tr("Reading from Katana…"),
             Self::WriteParams => tr("Writing…"),
-            Self::WriteChain { undo: false } => tr("Moving block…"),
+            Self::WriteChain { undo: false } => tr("Changing signal chain…"),
             Self::WriteChain { undo: true } => tr("Undoing chain change…"),
             Self::Switch(channel) => {
                 trf("Switching to {channel}…", &[("channel", channel.label())])
@@ -98,90 +97,9 @@ struct Held {
     baseline: Option<PatchImage>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Move {
-    Left,
-    Right,
-    Start,
-    End,
-}
-
-impl Move {
-    const ALL: [Self; 4] = [Self::Left, Self::Right, Self::Start, Self::End];
-
-    fn action(self) -> &'static str {
-        match self {
-            Self::Left => "move-left",
-            Self::Right => "move-right",
-            Self::Start => "move-start",
-            Self::End => "move-end",
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Left => "Move Left",
-            Self::Right => "Move Right",
-            Self::Start => "Move to Start",
-            Self::End => "Move to End",
-        }
-    }
-
-    fn accel(self) -> &'static str {
-        match self {
-            Self::Left => "<Alt>Left",
-            Self::Right => "<Alt>Right",
-            Self::Start => "<Alt>Home",
-            Self::End => "<Alt>End",
-        }
-    }
-
-    fn from_key(key: gtk::gdk::Key) -> Option<Self> {
-        match key {
-            gtk::gdk::Key::Left | gtk::gdk::Key::KP_Left => Some(Self::Left),
-            gtk::gdk::Key::Right | gtk::gdk::Key::KP_Right => Some(Self::Right),
-            gtk::gdk::Key::Home | gtk::gdk::Key::KP_Home => Some(Self::Start),
-            gtk::gdk::Key::End | gtk::gdk::Key::KP_End => Some(Self::End),
-            _ => None,
-        }
-    }
-
-    fn target(self, from: usize, count: usize) -> Option<usize> {
-        match self {
-            Self::Left => from.checked_sub(1),
-            Self::Right => (from + 1 < count).then_some(from + 1),
-            Self::Start => (from > 0).then_some(0),
-            Self::End => (from + 1 < count).then(|| count - 1),
-        }
-    }
-}
-
-struct Gap {
-    root: gtk::Box,
-    indicator: gtk::Box,
-}
-
-impl Gap {
-    fn new() -> Self {
-        let indicator = gtk::Box::builder().css_classes(["drop-indicator"]).build();
-        let root = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .visible(false)
-            .build();
-        root.append(&indicator);
-        Self { root, indicator }
-    }
-
-    fn set_active(&self, active: bool) {
-        self.indicator.set_visible(active);
-        self.root.set_visible(active);
-    }
-}
-
 struct Card {
     key: &'static str,
     root: gtk::Overlay,
-    actions: Option<gio::SimpleActionGroup>,
     dot: gtk::Box,
     type_label: gtk::Label,
     power: Option<gtk::ToggleButton>,
@@ -200,14 +118,13 @@ pub struct Ui {
     status_page: adw::StatusPage,
     retry_button: gtk::Button,
     chain_box: gtk::Box,
+    chain_picker: gtk::DropDown,
     extras_box: gtk::Box,
     params_holder: adw::Bin,
     detail_icon: gtk::Image,
     detail_title: gtk::Label,
     detail_subtitle: gtk::Label,
-    detail_moves: gtk::Box,
     detail_clamp: adw::Clamp,
-    detail_actions: gio::SimpleActionGroup,
     preset_list: gtk::ListBox,
     preset_search: gtk::SearchEntry,
     sidebar: gtk::Box,
@@ -222,10 +139,6 @@ pub struct Ui {
     closing: Cell<bool>,
     cards: RefCell<Vec<Card>>,
     chain_keys: RefCell<Vec<&'static str>>,
-    refocus: Cell<Option<&'static str>>,
-    gaps: RefCell<Vec<Gap>>,
-    dragging: Cell<Option<&'static str>>,
-    drop_gap: Cell<Option<usize>>,
     chain_toast: RefCell<Option<adw::Toast>>,
     params: RefCell<Option<ParamsView>>,
     search_text: Rc<RefCell<String>>,
@@ -328,16 +241,13 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         }
     });
     ui.window.add_action(&apply);
-    let undo_chain = gio::SimpleAction::new("undo-chain", Some(glib::VariantTy::STRING));
+    let undo_chain = gio::SimpleAction::new("undo-chain", Some(glib::VariantTy::BYTE));
     let undo_ui = Rc::clone(ui);
     undo_chain.connect_activate(move |_, parameter| {
-        let order = parameter
-            .and_then(glib::Variant::get::<String>)
-            .and_then(|text| parse_hex(&text));
-        if let Some(order) = order
+        if let Some(pattern) = parameter.and_then(glib::Variant::get::<u8>)
             && undo_ui.chain_editable()
         {
-            undo_ui.write_chain(order, true);
+            undo_ui.write_chain(pattern, true);
         }
     });
     ui.window.add_action(&undo_chain);
@@ -378,13 +288,30 @@ fn main_menu() -> gio::Menu {
     menu
 }
 
-fn build_blocks_row() -> (gtk::Box, gtk::Box, gtk::Box, gtk::Box) {
-    let (chain, chain_box) = node_strip(&tr("Signal Chain"));
-    let (output, extras_box) = node_strip(&tr("Output"));
+fn build_blocks_row(chain_picker: &gtk::DropDown) -> (gtk::Box, gtk::Box, gtk::Box, gtk::Box) {
+    let (chain, chain_box) = node_strip(&tr("Signal Chain"), Some(chain_picker.upcast_ref()));
+    let (output, extras_box) = node_strip(&tr("Output"), None);
     (chain, chain_box, output, extras_box)
 }
 
-fn node_strip(heading: &str) -> (gtk::Box, gtk::Box) {
+fn chain_picker(table: &ParamTable) -> gtk::DropDown {
+    let labels = KATANA_50_MK2
+        .chain_patterns
+        .iter()
+        .map(|pattern| blocks::pattern_label(table, pattern))
+        .collect::<Vec<_>>();
+    let names = labels.iter().map(String::as_str).collect::<Vec<_>>();
+    let picker = gtk::DropDown::from_strings(&names);
+    picker.set_halign(gtk::Align::End);
+    picker.set_valign(gtk::Align::Center);
+    picker.set_margin_end(ROW_INSET);
+    picker.set_tooltip_text(Some(&tr("Signal chain order")));
+    picker.update_property(&[gtk::accessible::Property::Label(&tr("Signal Chain Order"))]);
+    picker.add_css_class("flat");
+    picker
+}
+
+fn node_strip(heading: &str, accessory: Option<&gtk::Widget>) -> (gtk::Box, gtk::Box) {
     let row = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(NODE_GAP)
@@ -401,7 +328,11 @@ fn node_strip(heading: &str) -> (gtk::Box, gtk::Box) {
         .build();
     let title = section_heading(heading);
     title.set_margin_start(ROW_INSET);
-    wrap.append(&title);
+    let heading_row = gtk::Overlay::builder().child(&title).build();
+    if let Some(accessory) = accessory {
+        heading_row.add_overlay(accessory);
+    }
+    wrap.append(&heading_row);
     wrap.append(&flow_arrow());
     wrap.append(&row);
     let scroller = gtk::ScrolledWindow::builder()
@@ -469,13 +400,10 @@ fn build_editor(
 
 struct Detail {
     clamp: adw::Clamp,
-    panel: gtk::Box,
     holder: adw::Bin,
     icon: gtk::Image,
     title: gtk::Label,
     subtitle: gtk::Label,
-    moves: gtk::Box,
-    actions: gio::SimpleActionGroup,
 }
 
 fn build_detail() -> Detail {
@@ -502,33 +430,6 @@ fn build_detail() -> Detail {
         .build();
     titles.append(&title);
     titles.append(&subtitle);
-    let moves = gtk::Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
-        .spacing(6)
-        .valign(gtk::Align::Center)
-        .build();
-    for step in [Move::Left, Move::Right] {
-        let icon_name = match step {
-            Move::Left => "go-previous-symbolic",
-            _ => "go-next-symbolic",
-        };
-        let button = gtk::Button::builder()
-            .icon_name(icon_name)
-            .action_name(format!("detail.{}", step.action()))
-            .tooltip_text(tr(step.label()))
-            .css_classes(["flat"])
-            .build();
-        button.update_property(&[gtk::accessible::Property::Label(&tr(step.label()))]);
-        moves.append(&button);
-    }
-    let menu = gtk::MenuButton::builder()
-        .icon_name("view-more-horizontal-symbolic")
-        .menu_model(&move_menu("detail"))
-        .css_classes(["flat"])
-        .tooltip_text(tr("Move Block"))
-        .build();
-    menu.update_property(&[gtk::accessible::Property::Label(&tr("Move Block"))]);
-    moves.append(&menu);
     let head = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(12)
@@ -536,7 +437,6 @@ fn build_detail() -> Detail {
         .build();
     head.append(&icon);
     head.append(&titles);
-    head.append(&moves);
     let holder = adw::Bin::builder().vexpand(true).build();
     let panel = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -546,8 +446,6 @@ fn build_detail() -> Detail {
         .build();
     panel.append(&head);
     panel.append(&holder);
-    let actions = gio::SimpleActionGroup::new();
-    panel.insert_action_group("detail", Some(&actions));
     let clamp = adw::Clamp::builder()
         .child(&panel)
         .vexpand(true)
@@ -556,42 +454,14 @@ fn build_detail() -> Detail {
         .build();
     Detail {
         clamp,
-        panel,
         holder,
         icon,
         title,
         subtitle,
-        moves,
-        actions,
     }
 }
 
-fn move_menu(prefix: &str) -> gio::Menu {
-    let model = gio::Menu::new();
-    let section = gio::Menu::new();
-    for step in Move::ALL {
-        let item = gio::MenuItem::new(
-            Some(&tr(step.label())),
-            Some(&format!("{prefix}.{}", step.action())),
-        );
-        item.set_attribute_value("accel", Some(&step.accel().to_variant()));
-        if matches!(step, Move::Start) {
-            model.append_section(None, &section);
-        }
-        if matches!(step, Move::Left | Move::Right) {
-            section.append_item(&item);
-        } else {
-            model.append_item(&item);
-        }
-    }
-    model
-}
-
-fn refresh_node_state(card: &Card, selected: bool, can_edit: bool) {
-    if card.actions.is_some() && !card.root.has_css_class("dragging") {
-        let cursor = if can_edit { "grab" } else { "pointer" };
-        card.root.set_cursor_from_name(Some(cursor));
-    }
+fn refresh_node_state(card: &Card, selected: bool) {
     if selected {
         card.root.add_css_class("selected");
     } else {
@@ -619,7 +489,6 @@ fn mini_node(spec: &'static BlockSpec) -> gtk::Box {
     node
 }
 
-const DRAG_ICON_MARGIN: u8 = 24;
 const NODE_WIDTH: i32 = 104;
 const NODE_HEIGHT: i32 = 96;
 const NODE_GAP: i32 = 20;
@@ -628,40 +497,12 @@ const NODE_ICON: i32 = 28;
 const NODE_CHARS: i32 = 11;
 const NODE_INSET: i32 = 10;
 const POWER_INSET: i32 = 4;
-const HANDLE_INSET: i32 = 6;
-const HANDLE_SIZE: i32 = 12;
 const MINI_ICON: i32 = 16;
 const DETAIL_ICON: i32 = 32;
 const DETAIL_MARGIN: i32 = 12;
 const SCROLLBAR_ROOM: i32 = 16;
 const WINDOW_MIN_WIDTH: i32 = 960;
 const WINDOW_MIN_HEIGHT: i32 = 600;
-
-fn drag_icon(card: &gtk::Widget) -> Option<gtk::gdk::Paintable> {
-    let bounds = card.compute_bounds(card)?;
-    let (width, height) = (bounds.width(), bounds.height());
-    let margin = f32::from(DRAG_ICON_MARGIN);
-    let image = gtk::WidgetPaintable::new(Some(card)).current_image();
-    let snapshot = gtk::Snapshot::new();
-    snapshot.translate(&gtk::graphene::Point::new(margin, margin));
-    let outline =
-        gtk::gsk::RoundedRect::from_rect(gtk::graphene::Rect::new(0.0, 0.0, width, height), 12.0);
-    snapshot.append_outset_shadow(
-        &outline,
-        &gtk::gdk::RGBA::new(0.0, 0.0, 0.0, 0.22),
-        0.0,
-        6.0,
-        0.0,
-        16.0,
-    );
-    snapshot.push_rounded_clip(&outline);
-    image.snapshot(&snapshot, f64::from(width), f64::from(height));
-    snapshot.pop();
-    snapshot.to_paintable(Some(&gtk::graphene::Size::new(
-        width + 2.0 * margin,
-        height + 2.0 * margin,
-    )))
-}
 
 fn section_heading(text: &str) -> gtk::Label {
     gtk::Label::builder()
@@ -678,7 +519,8 @@ impl Ui {
         let (header, title, status_label, light, content_toggle) = build_header();
         let (channel_section, channel_buttons) = build_channels();
         let (sidebar, preset_search, preset_list) = build_sidebar();
-        let (chain, chain_box, output, extras_box) = build_blocks_row();
+        let chain_picker = chain_picker(table);
+        let (chain, chain_box, output, extras_box) = build_blocks_row(&chain_picker);
         let detail = build_detail();
         let editor = build_editor(&channel_section, &chain, &detail.clamp, &output);
 
@@ -721,14 +563,13 @@ impl Ui {
             status_page,
             retry_button,
             chain_box,
+            chain_picker,
             extras_box,
             params_holder: detail.holder,
             detail_icon: detail.icon,
             detail_title: detail.title,
             detail_subtitle: detail.subtitle,
-            detail_moves: detail.moves,
             detail_clamp: detail.clamp.clone(),
-            detail_actions: detail.actions,
             preset_list,
             preset_search,
             sidebar,
@@ -746,17 +587,12 @@ impl Ui {
             closing: Cell::new(false),
             cards: RefCell::new(Vec::new()),
             chain_keys: RefCell::new(Vec::new()),
-            refocus: Cell::new(None),
-            gaps: RefCell::new(Vec::new()),
-            dragging: Cell::new(None),
-            drop_gap: Cell::new(None),
             chain_toast: RefCell::new(None),
             params: RefCell::new(None),
             search_text: Rc::new(RefCell::new(String::new())),
         });
         ui.connect_sidebar();
-        ui.connect_chain_drop();
-        ui.connect_detail(&detail.panel);
+        ui.connect_chain_picker();
         let close_ui = Rc::clone(&ui);
         ui.window
             .connect_close_request(move |_| close_ui.on_close_request());
@@ -789,174 +625,31 @@ impl Ui {
         });
     }
 
-    fn connect_detail(self: &Rc<Self>, panel: &gtk::Box) {
-        let target: MoveTarget = Rc::new(|ui: &Ui| {
-            let selected = ui.model.borrow().selected;
-            blocks::spec(selected)
-                .filter(|spec| blocks::is_movable(spec))
-                .map(|spec| spec.key)
-        });
-        self.add_move_actions(&self.detail_actions, &target);
-        panel.add_controller(self.move_keys(target));
-    }
-
-    fn add_move_actions(self: &Rc<Self>, actions: &gio::SimpleActionGroup, target: &MoveTarget) {
-        for step in Move::ALL {
-            let action = gio::SimpleAction::new(step.action(), None);
-            let weak = Rc::downgrade(self);
-            let target = Rc::clone(target);
-            action.connect_activate(move |_, _| {
-                let Some(ui) = weak.upgrade() else {
-                    return;
-                };
-                if let Some(key) = target(ui.as_ref()) {
-                    glib::idle_add_local_once(move || ui.move_block(key, step));
-                }
-            });
-            actions.add_action(&action);
-        }
-    }
-
-    fn move_keys(self: &Rc<Self>, target: MoveTarget) -> gtk::EventControllerKey {
-        let keys = gtk::EventControllerKey::new();
+    fn connect_chain_picker(self: &Rc<Self>) {
         let weak = Rc::downgrade(self);
-        keys.connect_key_pressed(move |_, pressed, _, state| {
-            if !state.contains(gtk::gdk::ModifierType::ALT_MASK) {
-                return glib::Propagation::Proceed;
-            }
+        self.chain_picker.connect_selected_notify(move |picker| {
             let Some(ui) = weak.upgrade() else {
-                return glib::Propagation::Proceed;
-            };
-            match Move::from_key(pressed).zip(target(ui.as_ref())) {
-                Some((step, key)) => {
-                    ui.move_block(key, step);
-                    glib::Propagation::Stop
-                }
-                None => glib::Propagation::Proceed,
-            }
-        });
-        keys
-    }
-
-    fn connect_chain_drop(self: &Rc<Self>) {
-        let target = gtk::DropTarget::new(glib::Type::STRING, gtk::gdk::DragAction::MOVE);
-        let motion_ui = Rc::downgrade(self);
-        target.connect_motion(move |_, x, _| {
-            let Some(ui) = motion_ui.upgrade() else {
-                return gtk::gdk::DragAction::empty();
-            };
-            if ui.dragging.get().is_none() {
-                return gtk::gdk::DragAction::empty();
-            }
-            ui.show_drop_gap(ui.useful_drop_gap(x));
-            gtk::gdk::DragAction::MOVE
-        });
-        let leave_ui = Rc::downgrade(self);
-        target.connect_leave(move |_| {
-            if let Some(ui) = leave_ui.upgrade() {
-                ui.show_drop_gap(None);
-            }
-        });
-        let drop_ui = Rc::downgrade(self);
-        target.connect_drop(move |_, value, x, _| {
-            let Some(ui) = drop_ui.upgrade() else {
-                return false;
-            };
-            ui.show_drop_gap(None);
-            let Some(key) = ui.dragging.get() else {
-                return false;
-            };
-            if value.get::<String>().ok().as_deref() != Some(key) {
-                return false;
-            }
-            let Some((from, gap)) = ui.chain_position(key).zip(ui.useful_drop_gap(x)) else {
-                return false;
-            };
-            let target = if gap > from { gap - 1 } else { gap };
-            glib::idle_add_local_once(move || ui.move_block_to(key, target));
-            true
-        });
-        self.chain_box.add_controller(target);
-    }
-
-    fn chain_position(&self, key: &str) -> Option<usize> {
-        self.chain_keys
-            .borrow()
-            .iter()
-            .filter(|candidate| blocks::spec(candidate).is_some_and(blocks::reorderable))
-            .position(|candidate| *candidate == key)
-    }
-
-    fn useful_drop_gap(&self, x: f64) -> Option<usize> {
-        let key = self.dragging.get()?;
-        let from = self.chain_position(key)?;
-        let cards = self.cards.borrow();
-        let gap = cards
-            .iter()
-            .filter(|card| blocks::spec(card.key).is_some_and(blocks::reorderable))
-            .filter_map(|card| card.root.compute_bounds(&self.chain_box))
-            .filter(|bounds| f64::from(bounds.x() + bounds.width() / 2.0) < x)
-            .count();
-        (gap != from && gap != from + 1).then_some(gap)
-    }
-
-    fn show_drop_gap(&self, gap: Option<usize>) {
-        if self.drop_gap.replace(gap) == gap {
-            return;
-        }
-        for (index, item) in self.gaps.borrow().iter().enumerate() {
-            item.set_active(Some(index) == gap);
-        }
-    }
-
-    fn connect_card_drag(self: &Rc<Self>, spec: &'static BlockSpec, root: &gtk::Overlay) {
-        let source = gtk::DragSource::builder()
-            .actions(gtk::gdk::DragAction::MOVE)
-            .build();
-        let hotspot = Rc::new(Cell::new((0, 0)));
-        let prepare_ui = Rc::downgrade(self);
-        let prepare_hotspot = Rc::clone(&hotspot);
-        source.connect_prepare(move |_, x, y| {
-            let ui = prepare_ui.upgrade()?;
-            if !ui.chain_editable() {
-                return None;
-            }
-            prepare_hotspot.set((round_to_i32(x), round_to_i32(y)));
-            Some(gtk::gdk::ContentProvider::for_value(&spec.key.to_value()))
-        });
-        let begin_ui = Rc::downgrade(self);
-        let begin_root = root.downgrade();
-        source.connect_drag_begin(move |source, _| {
-            let Some(root) = begin_root.upgrade() else {
                 return;
             };
-            let (x, y) = hotspot.get();
-            if let Some(icon) = drag_icon(root.upcast_ref()) {
-                source.set_icon(
-                    Some(&icon),
-                    x + i32::from(DRAG_ICON_MARGIN),
-                    y + i32::from(DRAG_ICON_MARGIN),
-                );
+            if ui.updating.get() {
+                return;
             }
-            root.add_css_class("dragging");
-            root.set_cursor_from_name(Some("grabbing"));
-            if let Some(ui) = begin_ui.upgrade() {
-                ui.dragging.set(Some(spec.key));
+            let Ok(pattern) = u8::try_from(picker.selected()) else {
+                return;
+            };
+            let current = ui.current_pattern();
+            if current == Some(pattern) || !ui.chain_editable() {
+                ui.refresh_chain_picker();
+                return;
             }
+            glib::idle_add_local_once(move || ui.write_chain(pattern, false));
         });
-        let end_ui = Rc::downgrade(self);
-        let end_root = root.downgrade();
-        source.connect_drag_end(move |_, _, _| {
-            if let Some(root) = end_root.upgrade() {
-                root.remove_css_class("dragging");
-                root.set_cursor_from_name(Some("grab"));
-            }
-            if let Some(ui) = end_ui.upgrade() {
-                ui.dragging.set(None);
-                ui.show_drop_gap(None);
-            }
-        });
-        root.add_controller(source);
+    }
+
+    fn current_pattern(&self) -> Option<u8> {
+        let profile = self.profile()?;
+        let model = self.model.borrow();
+        profile.chain_pattern_of(model.image.as_ref()?)
     }
 
     fn on_close_request(&self) -> glib::Propagation {
@@ -1391,18 +1084,11 @@ impl Ui {
 
     fn adopt_image(&self, image: PatchImage) {
         let mut image = image;
-        if self.chain_write_queued() {
-            let wanted = self
-                .model
-                .borrow()
-                .image
-                .as_ref()
-                .and_then(|current| blocks::chain_codes(self.table, current));
-            if let (Some(profile), Some(order)) = (self.profile(), wanted)
-                && let Ok(next) = profile.with_chain(&image, &order)
-            {
-                image = next;
-            }
+        if self.chain_write_queued()
+            && let (Some(profile), Some(pattern)) = (self.profile(), self.current_pattern())
+            && let Ok(next) = profile.with_chain_pattern(&image, pattern)
+        {
+            image = next;
         }
         self.set_image(image);
     }
@@ -1411,19 +1097,20 @@ impl Ui {
         let undo = matches!(job, Some(Job::WriteChain { undo: true }));
         let normalised = outcome.is_normalised();
         let changed = outcome.packets > 0;
-        let previous = hex(&outcome.previous);
+        let previous = outcome.previous;
         tracing::info!(
-            requested = %hex(&outcome.requested),
-            actual = %hex(&outcome.actual),
+            requested = outcome.requested,
+            actual = outcome.actual,
+            order = %hex(&outcome.order),
             normalised,
-            "effect chain written"
+            "chain pattern written"
         );
         self.adopt_image(outcome.image);
         if !changed {
             return;
         }
         let title = if normalised {
-            tr("The amp adjusted the signal chain order")
+            tr("The amp kept a different signal chain")
         } else if undo {
             tr("Signal chain change undone")
         } else {
@@ -1456,68 +1143,31 @@ impl Ui {
             })
     }
 
-    fn move_block(self: &Rc<Self>, key: &'static str, step: Move) {
-        let target = {
-            let model = self.model.borrow();
-            let Some(image) = model.image.as_ref() else {
-                return;
-            };
-            let keys: Vec<&str> = blocks::chain_order(self.table, image)
-                .iter()
-                .filter(|spec| blocks::reorderable(spec))
-                .map(|spec| spec.key)
-                .collect();
-            keys.iter()
-                .position(|candidate| *candidate == key)
-                .and_then(|from| step.target(from, keys.len()))
-        };
-        if let Some(target) = target {
-            self.move_block_to(key, target);
-        }
-    }
-
-    fn move_block_to(self: &Rc<Self>, key: &'static str, target: usize) {
-        if !self.chain_editable() || !blocks::spec(key).is_some_and(blocks::is_movable) {
-            return;
-        }
-        let order = {
-            let model = self.model.borrow();
-            let Some(image) = model.image.as_ref() else {
-                return;
-            };
-            let current = blocks::chain_codes(self.table, image);
-            match blocks::reorder(self.table, image, key, target) {
-                Some(order) if Some(&order) != current.as_ref() => order,
-                _ => return,
-            }
-        };
-        tracing::info!(block = key, target, "moving block in the signal chain");
-        self.refocus.set(Some(key));
-        self.write_chain(order, false);
-    }
-
-    fn write_chain(self: &Rc<Self>, order: Vec<u8>, undo: bool) {
+    fn write_chain(self: &Rc<Self>, pattern: u8, undo: bool) {
         let Some(profile) = self.profile() else {
             return;
         };
-        if let Err(error) = profile.validate_chain(&order) {
-            tracing::warn!(%error, "refusing chain write");
-            self.toast(&error.to_string());
-            return;
-        }
         {
             let mut model = self.model.borrow_mut();
-            if let Some(image) = model.image.as_mut()
-                && let Ok(next) = profile.with_chain(image, &order)
-            {
-                *image = next;
+            let Some(image) = model.image.as_mut() else {
+                return;
+            };
+            match profile.with_chain_pattern(image, pattern) {
+                Ok(next) => *image = next,
+                Err(error) => {
+                    drop(model);
+                    tracing::warn!(%error, "refusing chain write");
+                    self.toast(&error.to_string());
+                    return;
+                }
             }
         }
+        tracing::info!(pattern, "changing the signal chain pattern");
         if let Some(old) = self.chain_toast.take() {
             old.dismiss();
         }
         self.flush_writes_now();
-        self.send(Command::WriteChain(order), Job::WriteChain { undo });
+        self.send(Command::WriteChain(pattern), Job::WriteChain { undo });
         self.refresh_all();
     }
 
@@ -1937,7 +1587,7 @@ impl Ui {
         }
         self.sidebar.set_sensitive(true);
         self.refresh_light();
-        self.refresh_card_actions();
+        self.refresh_chain_picker();
     }
 
     fn refresh_light(&self) {
@@ -1976,38 +1626,17 @@ impl Ui {
         }
     }
 
-    fn refresh_card_actions(&self) {
-        let editable = self.chain_editable();
-        let keys = self.chain_keys.borrow();
-        let chain: Vec<&str> = keys
-            .iter()
-            .copied()
-            .filter(|key| blocks::spec(key).is_some_and(blocks::reorderable))
-            .collect();
-        let enable = |actions: &gio::SimpleActionGroup, key: Option<&str>| {
-            let from = key.and_then(|key| chain.iter().position(|candidate| *candidate == key));
-            for step in Move::ALL {
-                let enabled = editable
-                    && from
-                        .and_then(|from| step.target(from, chain.len()))
-                        .is_some();
-                if let Some(action) = actions
-                    .lookup_action(step.action())
-                    .and_then(|action| action.downcast::<gio::SimpleAction>().ok())
-                {
-                    action.set_enabled(enabled);
-                }
-            }
-        };
-        for card in self.cards.borrow().iter() {
-            if let Some(actions) = &card.actions {
-                enable(actions, Some(card.key));
-            }
+    fn refresh_chain_picker(&self) {
+        let previous = self.updating.replace(true);
+        let selected = self
+            .current_pattern()
+            .map_or(gtk::INVALID_LIST_POSITION, u32::from);
+        if self.chain_picker.selected() != selected {
+            self.chain_picker.set_selected(selected);
         }
-        let selected = self.model.borrow().selected;
-        let movable = blocks::spec(selected).is_some_and(blocks::is_movable);
-        self.detail_moves.set_visible(movable);
-        enable(&self.detail_actions, movable.then_some(selected));
+        self.updating.set(previous);
+        self.chain_picker
+            .set_sensitive(self.chain_editable() && self.current_pattern().is_some());
     }
 
     fn rebuild_presets(&self) {
@@ -2055,11 +1684,6 @@ impl Ui {
             self.rebuild_chain(&order);
             *self.chain_keys.borrow_mut() = keys;
         }
-        if let Some(key) = self.refocus.take()
-            && let Some(card) = self.cards.borrow().iter().find(|card| card.key == key)
-        {
-            card.root.grab_focus();
-        }
         let chain: Vec<&'static str> = order
             .iter()
             .filter(|spec| blocks::reorderable(spec))
@@ -2075,21 +1699,14 @@ impl Ui {
             let title = tr(spec.title);
             if let Some(position) = chain.iter().position(|key| *key == card.key) {
                 let position = (position + 1).to_string();
-                let text = if blocks::is_movable(spec) {
-                    trf(
-                        "Position {position} of {count} in the signal chain. Drag it, use its context menu, or press Alt+Left and Alt+Right to move it.",
-                        &[("position", &position), ("count", &count)],
-                    )
-                } else {
-                    trf(
-                        "Position {position} of {count} in the signal chain. The amp stays in place, effects move around it.",
-                        &[("position", &position), ("count", &count)],
-                    )
-                };
+                let text = trf(
+                    "Position {position} of {count} in the signal chain. Choose the order with Signal Chain Order.",
+                    &[("position", &position), ("count", &count)],
+                );
                 card.root
                     .update_property(&[gtk::accessible::Property::Description(&text)]);
             }
-            refresh_node_state(card, card.key == model.selected, can_edit);
+            refresh_node_state(card, card.key == model.selected);
             let on = blocks::is_on(self.table, image, spec);
             if on == Some(false) {
                 card.root.add_css_class("block-off");
@@ -2134,6 +1751,7 @@ impl Ui {
         }
         self.updating.set(previous);
         drop(model);
+        self.refresh_chain_picker();
         self.fit_detail();
     }
 
@@ -2144,7 +1762,6 @@ impl Ui {
             }
         }
         let mut cards = Vec::new();
-        let mut gaps = Vec::new();
         for spec in order {
             if spec.mini {
                 self.chain_box.append(&mini_node(spec));
@@ -2154,28 +1771,15 @@ impl Ui {
             if spec.chain_label.is_none() {
                 self.extras_box.append(&card.root);
             } else {
-                if blocks::reorderable(spec) {
-                    let gap = Gap::new();
-                    self.chain_box.append(&gap.root);
-                    gaps.push(gap);
-                }
                 self.chain_box.append(&card.root);
             }
             cards.push(card);
         }
-        let end = Gap::new();
-        self.chain_box.append(&end.root);
-        gaps.push(end);
         *self.cards.borrow_mut() = cards;
-        *self.gaps.borrow_mut() = gaps;
-        self.drop_gap.set(None);
         self.fit_detail();
     }
 
     fn fit_detail(&self) {
-        if self.dragging.get().is_some() {
-            return;
-        }
         let (_, natural, _, _) = self.chain_box.measure(gtk::Orientation::Horizontal, -1);
         let width = (natural - 2 * ROW_INSET).max(0);
         if width > 0 && self.detail_clamp.maximum_size() != width {
@@ -2237,35 +1841,9 @@ impl Ui {
         root.add_overlay(&dot);
         let power = spec.on_param.map(|id| self.power_toggle(spec, id, &root));
         self.connect_node_select(spec, &root);
-        let actions = blocks::is_movable(spec).then(|| {
-            let actions = gio::SimpleActionGroup::new();
-            let target: MoveTarget = Rc::new(move |_: &Ui| Some(spec.key));
-            self.add_move_actions(&actions, &target);
-            root.insert_action_group("card", Some(&actions));
-            root.add_controller(self.move_keys(target));
-            Self::connect_node_menu(&root);
-            self.connect_card_drag(spec, &root);
-            root.add_overlay(
-                &gtk::Image::builder()
-                    .icon_name("list-drag-handle-symbolic")
-                    .pixel_size(HANDLE_SIZE)
-                    .halign(gtk::Align::End)
-                    .valign(gtk::Align::End)
-                    .margin_bottom(HANDLE_INSET)
-                    .margin_end(HANDLE_INSET)
-                    .can_target(false)
-                    .can_focus(false)
-                    .focusable(false)
-                    .css_classes(["node-handle"])
-                    .accessible_role(gtk::AccessibleRole::Presentation)
-                    .build(),
-            );
-            actions
-        });
         Card {
             key: spec.key,
             root,
-            actions,
             dot,
             type_label,
             power,
@@ -2358,31 +1936,6 @@ impl Ui {
         root.add_controller(keys);
     }
 
-    fn connect_node_menu(root: &gtk::Overlay) {
-        let menu = gtk::MenuButton::builder()
-            .menu_model(&move_menu("card"))
-            .halign(gtk::Align::Fill)
-            .valign(gtk::Align::Fill)
-            .opacity(0.0)
-            .can_target(false)
-            .focusable(false)
-            .css_classes(["node-menu"])
-            .build();
-        menu.update_state(&[gtk::accessible::State::Hidden(true)]);
-        root.add_overlay(&menu);
-        let context = gtk::GestureClick::builder()
-            .button(gtk::gdk::BUTTON_SECONDARY)
-            .build();
-        let popup = menu.downgrade();
-        context.connect_pressed(move |gesture, _, _, _| {
-            gesture.set_state(gtk::EventSequenceState::Claimed);
-            if let Some(menu) = popup.upgrade() {
-                menu.popup();
-            }
-        });
-        root.add_controller(context);
-    }
-
     fn refresh_params(self: &Rc<Self>) {
         let model = self.model.borrow();
         let Some(image) = model.image.as_ref() else {
@@ -2434,22 +1987,12 @@ impl Ui {
     }
 }
 
-fn round_to_i32(value: f64) -> i32 {
-    format!("{value:.0}").parse().unwrap_or_default()
-}
-
 fn hex(bytes: &[u8]) -> String {
     bytes
         .iter()
         .map(|byte| format!("{byte:02X}"))
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn parse_hex(text: &str) -> Option<Vec<u8>> {
-    text.split_whitespace()
-        .map(|word| u8::from_str_radix(word, 16).ok())
-        .collect()
 }
 
 fn editable_differs(

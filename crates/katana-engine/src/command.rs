@@ -14,7 +14,7 @@ pub enum Command {
     ReadTemp,
     WriteTemp(PatchImage),
     WriteParams(Vec<ParamWrite>),
-    WriteChain(Vec<u8>),
+    WriteChain(u8),
     SwitchChannel(Channel),
     BackupTemp { key: String },
     RestoreBackup { key: String },
@@ -62,9 +62,10 @@ pub struct WriteOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChainOutcome {
-    pub previous: Vec<u8>,
-    pub requested: Vec<u8>,
-    pub actual: Vec<u8>,
+    pub previous: u8,
+    pub requested: u8,
+    pub actual: u8,
+    pub order: Vec<u8>,
     pub packets: usize,
     pub report: VerifyReport,
     pub image: PatchImage,

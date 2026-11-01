@@ -39,16 +39,6 @@ pub enum ProtocolError {
     InvalidName(String),
     #[error("write of {len} bytes at {address} is forbidden by the device profile")]
     WriteForbidden { address: Address, len: usize },
-    #[error("effect chain must name each of the {expected} blocks exactly once, got [{}]", hex(.order))]
-    InvalidChain { expected: usize, order: Vec<u8> },
-    #[error("effect chain [{}] is not one of the official chain patterns", hex(.order))]
-    UnofficialChain { order: Vec<u8> },
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .map(|byte| format!("{byte:02X}"))
-        .collect::<Vec<_>>()
-        .join(" ")
+    #[error("chain pattern {pattern} is not one of the {count} official chain patterns")]
+    InvalidChainPattern { pattern: u8, count: usize },
 }

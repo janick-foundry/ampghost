@@ -100,20 +100,17 @@ pub fn print_outcome(outcome: &WriteOutcome) {
 }
 
 pub fn print_chain_outcome(outcome: &ChainOutcome) {
-    println!("chain was:  {}", hex(&outcome.previous));
-    println!("requested:  {}", hex(&outcome.requested));
+    println!("pattern was: {}", outcome.previous);
+    println!("requested:   {}", outcome.requested);
     if outcome.packets == 0 {
-        println!("chain:      nothing to write, temp already holds this order");
+        println!("chain:       nothing to write, temp already holds this pattern");
         return;
     }
-    println!("read back:  {}", hex(&outcome.actual));
+    println!("read back:   {} ({})", outcome.actual, hex(&outcome.order));
     if outcome.is_normalised() {
-        println!("chain:      the amp normalised the order (not retried)");
+        println!("chain:       the amp did not keep the pattern (not retried)");
     } else {
-        println!(
-            "chain:      kept exactly, {} packet(s) sent",
-            outcome.packets
-        );
+        println!("chain:       kept, {} packet(s) sent", outcome.packets);
     }
     let other = outcome
         .report

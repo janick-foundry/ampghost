@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use katana_params::{Area, Param, ParamTable};
 use katana_protocol::PatchImage;
 
@@ -345,8 +346,6 @@ pub fn param_value(param: &Param, image: &PatchImage) -> Option<u16> {
     param.decode(&bytes).ok()
 }
 
-pub const ANCHOR: &str = "amp";
-
 const CHAIN_SLOTS: usize = 20;
 
 fn slot_param(table: &ParamTable, slot: usize) -> Option<&Param> {
@@ -364,14 +363,14 @@ pub fn reorderable(spec: &BlockSpec) -> bool {
     spec.chain_label.is_some() && !spec.passive
 }
 
-const PATTERN_LABELS: [&str; 4] = ["OD", "FX1", "FX2", "DD1"];
-
-pub fn is_movable(spec: &BlockSpec) -> bool {
-    reorderable(spec)
-        && spec.key != ANCHOR
-        && spec
-            .chain_label
-            .is_some_and(|label| PATTERN_LABELS.contains(&label))
+pub fn pattern_label(table: &ParamTable, pattern: &[u8]) -> String {
+    pattern
+        .iter()
+        .map(|&code| {
+            spec_for_code(table, code).map_or_else(|| code.to_string(), |spec| tr(spec.title))
+        })
+        .collect::<Vec<_>>()
+        .join(" → ")
 }
 
 pub fn chain_codes(table: &ParamTable, image: &PatchImage) -> Option<Vec<u8>> {
@@ -398,30 +397,6 @@ pub fn chain_order(table: &ParamTable, image: &PatchImage) -> Vec<&'static Block
         }
     }
     order
-}
-
-pub fn reorder(
-    table: &ParamTable,
-    image: &PatchImage,
-    moved: &str,
-    target: usize,
-) -> Option<Vec<u8>> {
-    let mut codes = chain_codes(table, image)?;
-    let mut slots = Vec::new();
-    let mut visible = Vec::new();
-    for (slot, &code) in codes.iter().enumerate() {
-        if let Some(spec) = spec_for_code(table, code).filter(|spec| reorderable(spec)) {
-            slots.push(slot);
-            visible.push((spec.key, code));
-        }
-    }
-    let from = visible.iter().position(|(key, _)| *key == moved)?;
-    let item = visible.remove(from);
-    visible.insert(target.min(visible.len()), item);
-    for (slot, (_, code)) in slots.into_iter().zip(visible) {
-        *codes.get_mut(slot)? = code;
-    }
-    Some(codes)
 }
 
 pub fn extras() -> impl Iterator<Item = &'static BlockSpec> {
