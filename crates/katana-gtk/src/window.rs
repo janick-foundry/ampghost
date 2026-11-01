@@ -300,7 +300,6 @@ fn chain_picker(table: &ParamTable) -> gtk::DropDown {
     let names = labels.iter().map(String::as_str).collect::<Vec<_>>();
     let picker = gtk::DropDown::from_strings(&names);
     picker.set_halign(gtk::Align::End);
-    picker.set_valign(gtk::Align::Center);
     picker.set_margin_end(ROW_INSET);
     picker.set_tooltip_text(Some(&tr("Signal chain order")));
     picker.update_property(&[gtk::accessible::Property::Label(&tr("Signal Chain Order"))]);
@@ -326,9 +325,17 @@ fn node_strip(heading: &str, accessory: Option<&gtk::Widget>) -> (gtk::Box, gtk:
     let title = section_heading(heading);
     title.set_margin_start(ROW_INSET);
     title.set_margin_top(6);
-    let heading_row = gtk::Overlay::builder().child(&title).margin_top(6).build();
+    title.set_hexpand(true);
+    title.set_valign(gtk::Align::BaselineCenter);
+    let heading_row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .baseline_position(gtk::BaselinePosition::Center)
+        .margin_top(6)
+        .build();
+    heading_row.append(&title);
     if let Some(accessory) = accessory {
-        heading_row.add_overlay(accessory);
+        accessory.set_valign(gtk::Align::BaselineCenter);
+        heading_row.append(accessory);
     }
     wrap.append(&heading_row);
     wrap.append(&flow_arrow());
