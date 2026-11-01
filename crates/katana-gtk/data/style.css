@@ -270,6 +270,16 @@
   margin-right: 9px;
 }
 
+.node-handle {
+  opacity: 0.45;
+  transition: opacity 150ms ease;
+}
+
+.chain-node:hover .node-handle,
+.chain-node:focus-visible .node-handle {
+  opacity: 1;
+}
+
 .preset-apply {
   opacity: 0.45;
   transition: opacity 150ms ease;

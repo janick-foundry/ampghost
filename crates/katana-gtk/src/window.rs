@@ -628,6 +628,8 @@ const NODE_ICON: i32 = 28;
 const NODE_CHARS: i32 = 11;
 const NODE_INSET: i32 = 10;
 const POWER_INSET: i32 = 4;
+const HANDLE_INSET: i32 = 6;
+const HANDLE_SIZE: i32 = 12;
 const MINI_ICON: i32 = 16;
 const DETAIL_ICON: i32 = 32;
 const DETAIL_MARGIN: i32 = 12;
@@ -2243,6 +2245,21 @@ impl Ui {
             root.add_controller(self.move_keys(target));
             Self::connect_node_menu(&root);
             self.connect_card_drag(spec, &root);
+            root.add_overlay(
+                &gtk::Image::builder()
+                    .icon_name("list-drag-handle-symbolic")
+                    .pixel_size(HANDLE_SIZE)
+                    .halign(gtk::Align::End)
+                    .valign(gtk::Align::End)
+                    .margin_bottom(HANDLE_INSET)
+                    .margin_end(HANDLE_INSET)
+                    .can_target(false)
+                    .can_focus(false)
+                    .focusable(false)
+                    .css_classes(["node-handle"])
+                    .accessible_role(gtk::AccessibleRole::Presentation)
+                    .build(),
+            );
             actions
         });
         Card {
