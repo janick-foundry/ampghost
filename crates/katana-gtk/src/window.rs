@@ -325,7 +325,8 @@ fn node_strip(heading: &str, accessory: Option<&gtk::Widget>) -> (gtk::Box, gtk:
         .build();
     let title = section_heading(heading);
     title.set_margin_start(ROW_INSET);
-    let heading_row = gtk::Overlay::builder().child(&title).build();
+    title.set_margin_top(6);
+    let heading_row = gtk::Overlay::builder().child(&title).margin_top(6).build();
     if let Some(accessory) = accessory {
         heading_row.add_overlay(accessory);
     }
