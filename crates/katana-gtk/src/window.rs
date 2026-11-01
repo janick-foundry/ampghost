@@ -216,9 +216,6 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         }),
     );
     simple("about", Box::new(|ui| dialogs::about(&ui.window)));
-    let save_channel = gio::SimpleAction::new("save-channel", None);
-    save_channel.set_enabled(false);
-    ui.window.add_action(&save_channel);
     let switch = gio::SimpleAction::new("switch-channel", Some(glib::VariantTy::STRING));
     let switch_ui = Rc::clone(ui);
     switch.connect_activate(move |_, parameter| {
@@ -278,17 +275,7 @@ fn main_menu() -> gio::Menu {
     let temp = gio::Menu::new();
     temp.append(Some(&tr("Back Up Temp Patch")), Some("win.backup"));
     temp.append(Some(&tr("Restore Backup to Temp…")), Some("win.restore"));
-    temp.append(
-        Some(&tr("Save Current Sound as Preset…")),
-        Some("win.save-preset"),
-    );
     menu.append_section(None, &temp);
-    let channel = gio::Menu::new();
-    channel.append(
-        Some(&tr("Save Temp to Channel… (Not Implemented)")),
-        Some("win.save-channel"),
-    );
-    menu.append_section(None, &channel);
     let about = gio::Menu::new();
     about.append(Some(&tr("About Katana Control")), Some("win.about"));
     menu.append_section(None, &about);
@@ -2315,7 +2302,7 @@ fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
     ));
     let save_button = gtk::Button::builder()
         .label(tr("Save"))
-        .tooltip_text(tr("Save Current Sound as Preset"))
+        .tooltip_text(tr("Save Current Sound as Preset (Ctrl+S)"))
         .action_name("win.save-preset")
         .css_classes(["suggested-action"])
         .hexpand(true)
