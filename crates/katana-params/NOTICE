@@ -43,3 +43,6 @@ Changes made to the derived data
   06 2D to 06 35, and the remaining choices follow the official menu order.
 * The chain slots 06 00 to 06 13 are marked hidden. The official editor treats them as padding
   and sets the signal chain only through the CHAIN pattern at 06 20 (0 to 6).
+* data/official_ranges.json lists the official raw range of every Temporary patch byte
+  (60 00 xx xx) from BOSS TONE STUDIO 2.1.0 address_map.js, as page, byte, size, min, max.
+  Full patch writes normalise fixed values and reject any other value outside these ranges.

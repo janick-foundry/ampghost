@@ -345,6 +345,22 @@ impl Session {
         sink: &mut dyn FnMut(Event),
     ) -> Result<WriteOutcome, EngineError> {
         let profile = self.profile()?;
+        let conformed;
+        let target = if offsets.is_some() {
+            target
+        } else {
+            let mut image = target.clone();
+            for change in katana_params::conform_to_official(&mut image)? {
+                tracing::info!(
+                    offset = %change.offset,
+                    from = change.from,
+                    to = change.to,
+                    "normalised a fixed parameter to the official value"
+                );
+            }
+            conformed = image;
+            &conformed
+        };
         self.editor_mode_on(sink)?;
         let plan = match offsets {
             Some(offsets) => profile.partial_write_plan(target, offsets)?,
