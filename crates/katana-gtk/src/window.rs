@@ -212,6 +212,13 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
     simple(
         "search",
         Box::new(|ui| {
+            if let Some(split) = ui
+                .preset_search
+                .ancestor(adw::OverlaySplitView::static_type())
+                .and_then(|widget| widget.downcast::<adw::OverlaySplitView>().ok())
+            {
+                split.set_show_sidebar(true);
+            }
             ui.preset_search.grab_focus();
         }),
     );
@@ -2153,7 +2160,7 @@ fn sidebar_toggle() -> gtk::ToggleButton {
     gtk::ToggleButton::builder()
         .icon_name("sidebar-show-symbolic")
         .tooltip_text(tr("Show Presets"))
-        .active(true)
+        .active(false)
         .build()
 }
 
@@ -2174,6 +2181,7 @@ fn build_split(
         .sidebar(&sidebar_pane)
         .content(&content_pane)
         .min_sidebar_width(240.0)
+        .show_sidebar(false)
         .build();
     let toggles = [
         Some(sidebar_toggle),
