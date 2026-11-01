@@ -38,3 +38,6 @@ Changes made to the derived data
   values: 00 23 Preamp 10, 00 2A Gain SW 1, 00 36 and 00 37 Bass/Treble Freq 0 to 10, and for
   MOD (02 xx) and FX (04 xx) 0F Separ 0, 17 RT Speed 1, 1A and 1B RT Rise/Fall Time 0,
   28 VB Off/On 1, 29 VB Rise Time 0. Hidden entries are not shown and not written one by one.
+* Delay types 3 to 5 (Dual series, Dual parallel, Dual L/R) and reverb types 0 and 2 (Ambience,
+  Hall1) were removed from the type choices at 05 01, 05 21, 05 41 and the variant types
+  06 2D to 06 35, and the remaining choices follow the official menu order.
