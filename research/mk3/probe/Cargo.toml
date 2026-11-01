@@ -1,0 +1,10 @@
+[package]
+name = "mk3-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+midir = "0.11.1"
+
+[workspace]
