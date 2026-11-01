@@ -184,6 +184,40 @@ pub fn choose_backup(
     dialog.present(Some(parent));
 }
 
+pub fn shortcuts(parent: &impl IsA<gtk::Widget>) {
+    let groups: [(String, Vec<(String, &str)>); 4] = [
+        (
+            tr("General"),
+            vec![
+                (tr("Keyboard Shortcuts"), "<Control>question"),
+                (tr("Close Window"), "<Control>w"),
+                (tr("Quit"), "<Control>q"),
+            ],
+        ),
+        (tr("Amp"), vec![(tr("Reload From Amp"), "<Control>r")]),
+        (
+            tr("Presets"),
+            vec![
+                (tr("Save Current Sound as Preset"), "<Control>s"),
+                (tr("Search Presets"), "<Control>f"),
+            ],
+        ),
+        (
+            tr("Signal Chain"),
+            vec![(tr("Select Focused Block"), "Return space")],
+        ),
+    ];
+    let dialog = adw::ShortcutsDialog::new();
+    for (title, items) in groups {
+        let section = adw::ShortcutsSection::new(Some(&title));
+        for (label, accelerator) in items {
+            section.add(adw::ShortcutsItem::new(&label, accelerator));
+        }
+        dialog.add(section);
+    }
+    dialog.present(Some(parent));
+}
+
 pub fn about(parent: &impl IsA<gtk::Widget>) {
     let dialog = adw::AboutDialog::builder()
         .application_name(tr("Katana Control"))

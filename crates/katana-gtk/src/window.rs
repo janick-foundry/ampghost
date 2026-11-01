@@ -216,6 +216,7 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         }),
     );
     simple("about", Box::new(|ui| dialogs::about(&ui.window)));
+    simple("shortcuts", Box::new(|ui| dialogs::shortcuts(&ui.window)));
     let switch = gio::SimpleAction::new("switch-channel", Some(glib::VariantTy::STRING));
     let switch_ui = Rc::clone(ui);
     switch.connect_activate(move |_, parameter| {
@@ -264,6 +265,7 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
     app.set_accels_for_action("win.search", &["<Control>f"]);
     app.set_accels_for_action("app.quit", &["<Control>q"]);
     app.set_accels_for_action("window.close", &["<Control>w"]);
+    app.set_accels_for_action("win.shortcuts", &["<Control>question"]);
 }
 
 fn main_menu() -> gio::Menu {
@@ -277,6 +279,7 @@ fn main_menu() -> gio::Menu {
     temp.append(Some(&tr("Restore Backup to Temp…")), Some("win.restore"));
     menu.append_section(None, &temp);
     let about = gio::Menu::new();
+    about.append(Some(&tr("Keyboard Shortcuts")), Some("win.shortcuts"));
     about.append(Some(&tr("About Katana Control")), Some("win.about"));
     menu.append_section(None, &about);
     menu
