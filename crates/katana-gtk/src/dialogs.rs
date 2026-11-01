@@ -96,6 +96,62 @@ pub fn confirm_replace(parent: &impl IsA<gtk::Widget>, name: &str, on_yes: impl 
     dialog.present(Some(parent));
 }
 
+pub fn confirm_update(
+    parent: &impl IsA<gtk::Widget>,
+    name: &str,
+    on_name: impl Fn(String) + 'static,
+) {
+    let dialog = adw::AlertDialog::new(
+        Some(&trf("Update “{name}”?", &[("name", name)])),
+        Some(&tr(
+            "The preset is replaced with the current sound read from the amp. You can rename it at the same time. Amp channels are not changed.",
+        )),
+    );
+    let entry = gtk::Entry::builder()
+        .text(name)
+        .activates_default(true)
+        .placeholder_text(tr("Preset Name"))
+        .build();
+    entry.update_property(&[gtk::accessible::Property::Label(&tr("Preset Name"))]);
+    dialog.set_extra_child(Some(&entry));
+    dialog.add_responses(&[("cancel", &tr("Cancel")), ("update", &tr("Update"))]);
+    dialog.set_response_appearance("update", adw::ResponseAppearance::Suggested);
+    dialog.set_default_response(Some("update"));
+    dialog.set_close_response("cancel");
+    let handler_entry = entry.clone();
+    dialog.connect_response(None, move |_, response| {
+        let name = handler_entry.text().trim().to_owned();
+        if response == "update" && !name.is_empty() {
+            on_name(name);
+        }
+    });
+    let sync_dialog = dialog.clone();
+    entry.connect_changed(move |entry| {
+        sync_dialog.set_response_enabled("update", !entry.text().trim().is_empty());
+    });
+    dialog.present(Some(parent));
+    entry.grab_focus();
+}
+
+pub fn confirm_delete(parent: &impl IsA<gtk::Widget>, name: &str, on_yes: impl Fn() + 'static) {
+    let dialog = adw::AlertDialog::new(
+        Some(&trf("Delete “{name}”?", &[("name", name)])),
+        Some(&tr(
+            "The preset file is removed from this computer. Amp channels are not changed.",
+        )),
+    );
+    dialog.add_responses(&[("cancel", &tr("Cancel")), ("delete", &tr("Delete"))]);
+    dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+    dialog.set_default_response(Some("cancel"));
+    dialog.set_close_response("cancel");
+    dialog.connect_response(None, move |_, response| {
+        if response == "delete" {
+            on_yes();
+        }
+    });
+    dialog.present(Some(parent));
+}
+
 pub fn choose_backup(
     parent: &impl IsA<gtk::Widget>,
     keys: Vec<String>,

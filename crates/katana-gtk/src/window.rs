@@ -46,6 +46,8 @@ enum Job {
     Backup { then: Option<FollowUp> },
     Restore,
     SavePreset,
+    UpdatePreset(String),
+    DeletePreset(String),
     ApplyPreset(String),
     PutBack,
     ListPresets,
@@ -71,6 +73,8 @@ impl Job {
             Self::Backup { then: Some(_) } => tr("Backing up current sound…"),
             Self::Restore => tr("Restoring backup…"),
             Self::SavePreset => tr("Saving preset…"),
+            Self::UpdatePreset(name) => trf("Updating “{name}”…", &[("name", name)]),
+            Self::DeletePreset(name) => trf("Deleting “{name}”…", &[("name", name)]),
             Self::ApplyPreset(name) => trf("Applying “{name}”…", &[("name", name)]),
             Self::PutBack => tr("Putting your edits back…"),
             Self::ListPresets | Self::ListBackups => String::new(),
@@ -85,6 +89,7 @@ struct Model {
     image: Option<PatchImage>,
     baseline: Option<PatchImage>,
     presets: Vec<PresetEntry>,
+    chosen_preset: Option<String>,
     selected: &'static str,
     pending_switch: Option<Channel>,
     failed_detect: bool,
@@ -202,6 +207,8 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         Box::new(|ui| ui.send(Command::ListBackups, Job::ListBackups)),
     );
     simple("save-preset", Box::new(|ui| ui.prompt_save_preset(None)));
+    simple("edit-preset", Box::new(Ui::prompt_update_preset));
+    simple("delete-preset", Box::new(Ui::prompt_delete_preset));
     simple(
         "search",
         Box::new(|ui| {
@@ -618,6 +625,22 @@ impl Ui {
                         || entry.patch_name.to_lowercase().contains(&query)
                 })
         });
+        let select_ui = Rc::downgrade(self);
+        self.preset_list.connect_row_selected(move |_, row| {
+            let Some(ui) = select_ui.upgrade() else {
+                return;
+            };
+            let key = {
+                let model = ui.model.borrow();
+                row.and_then(|row| usize::try_from(row.index()).ok())
+                    .and_then(|index| model.presets.get(index))
+                    .map(|entry| entry.key.clone())
+            };
+            if row.is_some() || ui.model.borrow().presets.is_empty() {
+                ui.model.borrow_mut().chosen_preset = key;
+            }
+            ui.refresh_sensitivity();
+        });
         let search_ui = Rc::clone(self);
         self.preset_search.connect_search_changed(move |entry| {
             *search_ui.search_text.borrow_mut() = entry.text().to_string();
@@ -812,9 +835,12 @@ impl Ui {
                 self.toast(&trf("Restored {key} to temp", &[("key", &key)]));
             }
             Event::PresetSaved { name, .. } => self.on_preset_saved(&name),
-            Event::PresetUpdated { .. } | Event::PresetDeleted { .. } => {
-                self.send(Command::ListPresets, Job::ListPresets);
-            }
+            Event::PresetUpdated {
+                previous,
+                key,
+                name,
+            } => self.on_preset_updated(&previous, key, &name),
+            Event::PresetDeleted { key } => self.on_preset_deleted(&key),
             Event::PresetApplied { name, outcome, .. } => {
                 self.set_clean_image(outcome.image);
                 let text = if outcome.attempts > 1 {
@@ -1046,6 +1072,89 @@ impl Ui {
         if let Some(image) = image {
             self.backup_then(FollowUp::PutBack(image));
         }
+    }
+
+    fn on_preset_updated(&self, previous: &str, key: String, name: &str) {
+        {
+            let mut model = self.model.borrow_mut();
+            let image = model.image.clone();
+            model.baseline = image;
+            if model.chosen_preset.as_deref() == Some(previous) {
+                model.chosen_preset = Some(key);
+            }
+        }
+        self.toast(&trf("Updated preset “{name}”", &[("name", name)]));
+        self.send(Command::ListPresets, Job::ListPresets);
+    }
+
+    fn on_preset_deleted(&self, key: &str) {
+        let name = {
+            let mut model = self.model.borrow_mut();
+            if model.chosen_preset.as_deref() == Some(key) {
+                model.chosen_preset = None;
+            }
+            let name = model
+                .presets
+                .iter()
+                .find(|entry| entry.key == key)
+                .map_or_else(|| key.to_owned(), |entry| entry.name.clone());
+            model.presets.retain(|entry| entry.key != key);
+            name
+        };
+        self.rebuild_presets();
+        self.refresh_sensitivity();
+        self.toast(&trf("Deleted preset “{name}”", &[("name", &name)]));
+        self.send(Command::ListPresets, Job::ListPresets);
+    }
+
+    fn chosen_entry(&self) -> Option<PresetEntry> {
+        let model = self.model.borrow();
+        let key = model.chosen_preset.as_ref()?;
+        model
+            .presets
+            .iter()
+            .find(|entry| &entry.key == key)
+            .cloned()
+    }
+
+    fn prompt_update_preset(self: &Rc<Self>) {
+        if !self.can_write() || self.is_busy() {
+            return;
+        }
+        let Some(entry) = self.chosen_entry() else {
+            return;
+        };
+        let ui = Rc::clone(self);
+        let title = entry.name.clone();
+        dialogs::confirm_update(&self.window, &title, move |name| {
+            ui.flush_writes_now();
+            ui.send(
+                Command::UpdatePreset {
+                    key: entry.key.clone(),
+                    name: name.clone(),
+                },
+                Job::UpdatePreset(name),
+            );
+        });
+    }
+
+    fn prompt_delete_preset(self: &Rc<Self>) {
+        if self.is_busy() {
+            return;
+        }
+        let Some(entry) = self.chosen_entry() else {
+            return;
+        };
+        let ui = Rc::clone(self);
+        let title = entry.name.clone();
+        dialogs::confirm_delete(&self.window, &title, move || {
+            ui.send(
+                Command::DeletePreset {
+                    key: entry.key.clone(),
+                },
+                Job::DeletePreset(entry.name.clone()),
+            );
+        });
     }
 
     fn on_preset_saved(&self, name: &str) {
@@ -1572,6 +1681,19 @@ impl Ui {
             button.set_sensitive(writable && available && !busy);
         }
         self.preset_list.set_sensitive(writable && !busy);
+        let chosen = self.chosen_entry().is_some();
+        for (name, enabled) in [
+            ("edit-preset", writable && !busy && chosen),
+            ("delete-preset", !busy && chosen),
+        ] {
+            if let Some(action) = self
+                .window
+                .lookup_action(name)
+                .and_then(|action| action.downcast::<gio::SimpleAction>().ok())
+            {
+                action.set_enabled(enabled);
+            }
+        }
         for name in ["backup", "restore", "save-preset", "reload"] {
             if let Some(action) = self
                 .window
@@ -1645,6 +1767,7 @@ impl Ui {
     fn rebuild_presets(&self) {
         self.preset_list.remove_all();
         let model = self.model.borrow();
+        let mut chosen_row = None;
         for entry in &model.presets {
             let subtitle = if entry.patch_name.is_empty() || entry.patch_name == entry.name {
                 entry.model.clone()
@@ -1670,6 +1793,13 @@ impl Ui {
                     .build(),
             );
             self.preset_list.append(&row);
+            if model.chosen_preset.as_ref() == Some(&entry.key) {
+                chosen_row = Some(row.clone());
+            }
+        }
+        drop(model);
+        if let Some(row) = chosen_row {
+            self.preset_list.select_row(Some(&row));
         }
     }
 
@@ -2174,7 +2304,7 @@ fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
         .build();
     let preset_list = gtk::ListBox::builder()
         .css_classes(["navigation-sidebar", "preset-list"])
-        .selection_mode(gtk::SelectionMode::None)
+        .selection_mode(gtk::SelectionMode::Single)
         .build();
     preset_list.set_placeholder(Some(
         &gtk::Label::builder()
@@ -2184,10 +2314,32 @@ fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
             .build(),
     ));
     let save_button = gtk::Button::builder()
-        .label(tr("Save Current Sound as Preset"))
+        .label(tr("Save"))
+        .tooltip_text(tr("Save Current Sound as Preset"))
         .action_name("win.save-preset")
         .css_classes(["suggested-action"])
+        .hexpand(true)
         .build();
+    let edit_button = gtk::Button::builder()
+        .label(tr("Edit"))
+        .tooltip_text(tr("Update the Selected Preset with the Current Sound"))
+        .action_name("win.edit-preset")
+        .hexpand(true)
+        .build();
+    let delete_button = gtk::Button::builder()
+        .label(tr("Delete"))
+        .tooltip_text(tr("Delete the Selected Preset"))
+        .action_name("win.delete-preset")
+        .hexpand(true)
+        .build();
+    let preset_buttons = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .homogeneous(true)
+        .css_classes(["linked"])
+        .build();
+    preset_buttons.append(&save_button);
+    preset_buttons.append(&edit_button);
+    preset_buttons.append(&delete_button);
     let sidebar = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(8)
@@ -2204,7 +2356,7 @@ fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
             .child(&preset_list)
             .build(),
     );
-    sidebar.append(&save_button);
+    sidebar.append(&preset_buttons);
 
     (sidebar, preset_search, preset_list)
 }
