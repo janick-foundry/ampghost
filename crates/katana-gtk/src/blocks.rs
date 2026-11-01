@@ -364,8 +364,14 @@ pub fn reorderable(spec: &BlockSpec) -> bool {
     spec.chain_label.is_some() && !spec.passive
 }
 
+const PATTERN_LABELS: [&str; 4] = ["OD", "FX1", "FX2", "DD1"];
+
 pub fn is_movable(spec: &BlockSpec) -> bool {
-    reorderable(spec) && spec.key != ANCHOR
+    reorderable(spec)
+        && spec.key != ANCHOR
+        && spec
+            .chain_label
+            .is_some_and(|label| PATTERN_LABELS.contains(&label))
 }
 
 pub fn chain_codes(table: &ParamTable, image: &PatchImage) -> Option<Vec<u8>> {

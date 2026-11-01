@@ -41,6 +41,8 @@ pub enum ProtocolError {
     WriteForbidden { address: Address, len: usize },
     #[error("effect chain must name each of the {expected} blocks exactly once, got [{}]", hex(.order))]
     InvalidChain { expected: usize, order: Vec<u8> },
+    #[error("effect chain [{}] is not one of the official chain patterns", hex(.order))]
+    UnofficialChain { order: Vec<u8> },
 }
 
 fn hex(bytes: &[u8]) -> String {

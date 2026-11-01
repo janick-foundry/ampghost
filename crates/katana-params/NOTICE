@@ -41,3 +41,5 @@ Changes made to the derived data
 * Delay types 3 to 5 (Dual series, Dual parallel, Dual L/R) and reverb types 0 and 2 (Ambience,
   Hall1) were removed from the type choices at 05 01, 05 21, 05 41 and the variant types
   06 2D to 06 35, and the remaining choices follow the official menu order.
+* The chain slots 06 00 to 06 13 are marked hidden. The official editor treats them as padding
+  and sets the signal chain only through the CHAIN pattern at 06 20 (0 to 6).

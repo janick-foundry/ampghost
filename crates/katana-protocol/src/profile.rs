@@ -21,6 +21,8 @@ pub struct DeviceProfile {
     pub channels: &'static [Channel],
     pub verify_rules: VerifyRules,
     pub write_order: WriteOrder,
+    pub chain_pattern: PatchOffset,
+    pub chain_patterns: &'static [[u8; 5]],
 }
 
 impl DeviceProfile {
@@ -58,7 +60,13 @@ impl DeviceProfile {
         image: &PatchImage,
         offsets: &[PatchOffset],
     ) -> Result<Vec<Dt1>, ProtocolError> {
-        let packets = plan_partial_write(image, self.temp_patch, offsets, &self.write_order)?;
+        let span = self.write_order.effect_chain;
+        let offsets = offsets
+            .iter()
+            .copied()
+            .filter(|offset| !span.contains(*offset))
+            .collect::<Vec<_>>();
+        let packets = plan_partial_write(image, self.temp_patch, &offsets, &self.write_order)?;
         self.checked(packets)
     }
 
@@ -78,14 +86,30 @@ impl DeviceProfile {
                 seen.get_mut(usize::from(block))
                     .is_some_and(|slot| !std::mem::replace(slot, true))
             });
-        if valid {
-            Ok(())
-        } else {
-            Err(ProtocolError::InvalidChain {
+        if !valid {
+            return Err(ProtocolError::InvalidChain {
                 expected,
                 order: order.to_vec(),
-            })
+            });
         }
+        self.chain_pattern_for(order)
+            .map(|_| ())
+            .ok_or_else(|| ProtocolError::UnofficialChain {
+                order: order.to_vec(),
+            })
+    }
+
+    pub fn chain_pattern_for(&self, order: &[u8]) -> Option<u8> {
+        let blocks = self.chain_patterns.first()?;
+        let placed = order
+            .iter()
+            .copied()
+            .filter(|block| blocks.contains(block))
+            .collect::<Vec<_>>();
+        self.chain_patterns
+            .iter()
+            .position(|pattern| pattern.as_slice() == placed.as_slice())
+            .and_then(|index| u8::try_from(index).ok())
     }
 
     pub fn with_chain(
@@ -94,10 +118,16 @@ impl DeviceProfile {
         order: &[u8],
     ) -> Result<PatchImage, ProtocolError> {
         self.validate_chain(order)?;
+        let pattern =
+            self.chain_pattern_for(order)
+                .ok_or_else(|| ProtocolError::UnofficialChain {
+                    order: order.to_vec(),
+                })?;
         let mut target = image.clone();
         for (offset, &block) in self.write_order.effect_chain.offsets().zip(order) {
             target.set(offset, block)?;
         }
+        target.set(self.chain_pattern, pattern)?;
         Ok(target)
     }
 
@@ -107,7 +137,13 @@ impl DeviceProfile {
             .chain_order(image)
             .ok_or(ProtocolError::OutsideLayout(span.start().linear()))?;
         self.validate_chain(&order)?;
-        let packet = Dt1::new(span.start().address(self.temp_patch)?, order)?;
+        let pattern = self
+            .chain_pattern_for(&order)
+            .ok_or(ProtocolError::UnofficialChain { order })?;
+        if image.get(self.chain_pattern) != Some(pattern) {
+            return Err(ProtocolError::OutsideLayout(self.chain_pattern.linear()));
+        }
+        let packet = Dt1::new(self.chain_pattern.address(self.temp_patch)?, [pattern])?;
         self.checked(vec![packet])
     }
 
@@ -149,10 +185,20 @@ const MK2_RETURNED: [Span; 2] = [
     Span::between(PatchOffset::new(0x08, 0x00), PatchOffset::new(0x0F, 0x47)),
 ];
 
-const MK2_AMP_DERIVED: [Span; 1] = [Span::between(
-    PatchOffset::new(0x06, 0x50),
-    PatchOffset::new(0x06, 0x61),
-)];
+const MK2_AMP_DERIVED: [Span; 2] = [
+    Span::between(PatchOffset::new(0x06, 0x00), PatchOffset::new(0x06, 0x13)),
+    Span::between(PatchOffset::new(0x06, 0x50), PatchOffset::new(0x06, 0x61)),
+];
+
+const MK2_CHAIN_PATTERNS: [[u8; 5]; 7] = [
+    [15, 2, 5, 6, 7],
+    [15, 5, 2, 6, 7],
+    [15, 5, 6, 2, 7],
+    [15, 5, 6, 7, 2],
+    [5, 15, 2, 6, 7],
+    [5, 15, 6, 2, 7],
+    [5, 15, 6, 7, 2],
+];
 
 const fn linked(block: &'static str, type_at: PatchOffset, index: u8, select_at: u8) -> LinkedType {
     LinkedType {
@@ -199,6 +245,8 @@ pub static KATANA_50_MK2: DeviceProfile = DeviceProfile {
         effect_chain: Span::between(PatchOffset::new(0x06, 0x00), PatchOffset::new(0x06, 0x13)),
         max_packet: 128,
     },
+    chain_pattern: PatchOffset::new(0x06, 0x20),
+    chain_patterns: &MK2_CHAIN_PATTERNS,
 };
 
 pub static PROFILES: [&DeviceProfile; 1] = [&KATANA_50_MK2];

@@ -16,15 +16,12 @@ enum Phase {
     TypeSelects,
     Pages,
     LatePage,
-    Chain,
 }
 
 impl WriteOrder {
     fn phase_of(&self, offset: PatchOffset) -> Phase {
         if self.type_selects.contains(offset) {
             Phase::TypeSelects
-        } else if self.effect_chain.contains(offset) {
-            Phase::Chain
         } else if offset.page() == self.late_page {
             Phase::LatePage
         } else {
