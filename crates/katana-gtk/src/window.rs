@@ -207,7 +207,7 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         Box::new(|ui| ui.send(Command::ListBackups, Job::ListBackups)),
     );
     simple("save-preset", Box::new(|ui| ui.prompt_save_preset(None)));
-    simple("edit-preset", Box::new(Ui::prompt_update_preset));
+    simple("update-preset", Box::new(Ui::prompt_update_preset));
     simple("delete-preset", Box::new(Ui::prompt_delete_preset));
     simple(
         "search",
@@ -1683,7 +1683,7 @@ impl Ui {
         self.preset_list.set_sensitive(writable && !busy);
         let chosen = self.chosen_entry().is_some();
         for (name, enabled) in [
-            ("edit-preset", writable && !busy && chosen),
+            ("update-preset", writable && !busy && chosen),
             ("delete-preset", !busy && chosen),
         ] {
             if let Some(action) = self
@@ -2320,10 +2320,10 @@ fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
         .css_classes(["suggested-action"])
         .hexpand(true)
         .build();
-    let edit_button = gtk::Button::builder()
-        .label(tr("Edit"))
+    let update_button = gtk::Button::builder()
+        .label(tr("Update"))
         .tooltip_text(tr("Update the Selected Preset with the Current Sound"))
-        .action_name("win.edit-preset")
+        .action_name("win.update-preset")
         .hexpand(true)
         .build();
     let delete_button = gtk::Button::builder()
@@ -2338,7 +2338,7 @@ fn build_sidebar() -> (gtk::Box, gtk::SearchEntry, gtk::ListBox) {
         .css_classes(["linked"])
         .build();
     preset_buttons.append(&save_button);
-    preset_buttons.append(&edit_button);
+    preset_buttons.append(&update_button);
     preset_buttons.append(&delete_button);
     let sidebar = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
