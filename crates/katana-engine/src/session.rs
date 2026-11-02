@@ -512,6 +512,7 @@ impl Session {
                     channel,
                     program,
                     attempts: attempt,
+                    reloaded: false,
                     temp,
                 });
             }
@@ -521,6 +522,31 @@ impl Session {
             wanted: channel,
             actual,
         })
+    }
+
+    pub(crate) fn bounce_channel(
+        &mut self,
+        channel: Channel,
+        sink: &mut dyn FnMut(Event),
+    ) -> Result<SwitchOutcome, EngineError> {
+        let profile = self.profile()?;
+        let other = profile
+            .channels
+            .iter()
+            .copied()
+            .find(|&candidate| candidate != channel)
+            .ok_or(EngineError::ChannelUnavailable(channel))?;
+        let map = self.read_program_change_map()?;
+        let program = map.program(other);
+        tracing::info!(%channel, %other, program, "bouncing through another channel");
+        sink(Event::Progress(Stage::Bouncing { channel }));
+        self.wait_for_program_change(sink)?;
+        self.transport.send(&program_change(program))?;
+        self.hold_off_program_change();
+        self.drain(self.timings.channel_settle)?;
+        let mut outcome = self.switch_channel(channel, sink)?;
+        outcome.reloaded = true;
+        Ok(outcome)
     }
 }
 

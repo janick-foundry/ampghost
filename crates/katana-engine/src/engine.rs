@@ -5,17 +5,19 @@ use std::time::{Duration, Instant};
 use katana_midi::{MidiBackend, PortInfo, katana_candidates};
 use katana_params::{ParamTable, ParamsError};
 use katana_protocol::{
-    DeviceProfile, Dt1, KATANA_50_MK2, LinkedType, PatchImage, PatchOffset, ProtocolError, verify,
+    Channel, DeviceProfile, Dt1, KATANA_50_MK2, LinkedType, PatchImage, PatchOffset, ProtocolError,
+    verify,
 };
 use katana_store::{
     FullBackup, LiveSetPatch, NamedBlock, Preset, PresetStorage, StoreError, TSL_MAX_PATCHES,
-    decode_preset, decode_syx, encode_preset, encode_syx, encode_tsl, image_to_blocks, preset_key,
-    read_preset_summary, validate_key,
+    blocks_to_image, decode_preset, decode_syx, encode_preset, encode_syx, encode_tsl,
+    image_to_blocks, preset_key, read_preset_summary, validate_key,
 };
 
 use crate::clock::Clock;
 use crate::command::{
-    ChainOutcome, Command, DetectReport, Event, ParamWrite, PresetEntry, Stage, WriteOutcome,
+    ChainOutcome, Command, DetectReport, Event, ParamWrite, PresetEntry, Stage, SwitchOutcome,
+    WriteOutcome,
 };
 use crate::error::EngineError;
 use crate::session::Session;
@@ -230,7 +232,6 @@ impl Engine {
                 self.write_chain(pattern, sink).map(Event::ChainWritten)
             }
             Command::SwitchChannel(channel) => self
-                .session()?
                 .switch_channel(channel, sink)
                 .map(Event::ChannelSwitched),
             Command::BackupTemp { key } => self.backup_temp(key),
@@ -438,6 +439,102 @@ impl Engine {
         let bytes = encode_syx(&image, profile.temp_patch)?;
         self.backups.write(&key, &bytes)?;
         Ok(Event::BackupSaved { key, image })
+    }
+
+    fn switch_channel(
+        &mut self,
+        channel: Channel,
+        sink: &mut dyn FnMut(Event),
+    ) -> Result<SwitchOutcome, EngineError> {
+        let session = self.session()?;
+        let profile = session.profile()?;
+        if !profile.has_channel(channel) {
+            return Err(EngineError::ChannelUnavailable(channel));
+        }
+        let current = session.read_current_channel()?;
+        tracing::info!(%current, %channel, "channel before switch");
+        if current != channel {
+            return session.switch_channel(channel, sink);
+        }
+        sink(Event::Progress(Stage::Reloading { channel }));
+        if let Some(row) = profile.reload_row(channel) {
+            match self.reload_stored(channel, row, sink) {
+                Ok(outcome) => return Ok(outcome),
+                Err(error) if error.is_disconnect() => return Err(error),
+                Err(error) => {
+                    tracing::warn!(%channel, row, %error, "stored reload failed, bouncing");
+                }
+            }
+        }
+        self.session()?.bounce_channel(channel, sink)
+    }
+
+    fn reload_stored(
+        &mut self,
+        channel: Channel,
+        row: u8,
+        sink: &mut dyn FnMut(Event),
+    ) -> Result<SwitchOutcome, EngineError> {
+        let stamp: String = self
+            .clock
+            .timestamp()
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .collect();
+        let key = format!("auto-before-reload-{stamp}.syx");
+        validate_key(&key)?;
+        let session = self.session()?;
+        let profile = session.profile()?;
+        let layout = &profile.backup;
+        let base = layout.stored_patch_base(row)?;
+        let mut requests = Vec::new();
+        for block in layout.patch_blocks {
+            let chunks = layout.chunk_requests(block.offset.address(base)?, block.size)?;
+            requests.push((block, chunks));
+        }
+        let total = requests.iter().map(|(_, chunks)| chunks.len()).sum();
+        let mut done = 0;
+        let mut blocks = Vec::new();
+        for (block, chunks) in requests {
+            let mut data = Vec::new();
+            for request in chunks {
+                sink(Event::Progress(Stage::ReadingStored {
+                    channel,
+                    done,
+                    total,
+                }));
+                data.extend(session.read_exact(request)?);
+                done += 1;
+            }
+            blocks.push(NamedBlock {
+                name: block.name.to_owned(),
+                data,
+            });
+        }
+        let (mut image, report) = blocks_to_image(&blocks, &profile.patch_layout, layout)?;
+        tracing::info!(%channel, row, name = %image.name(), ?report, "stored patch read");
+        sink(Event::Progress(Stage::ReadingTemp));
+        let previous = session.read_temp()?;
+        if let Some(status) = layout.patch_block(layout.status_block) {
+            for offset in status.span().offsets() {
+                if let Some(value) = previous.get(offset) {
+                    image.set(offset, value)?;
+                }
+            }
+        }
+        let bytes = encode_syx(&previous, profile.temp_patch)?;
+        self.backups.write(&key, &bytes)?;
+        tracing::info!(%key, "temp backed up before reload");
+        let session = self.session()?;
+        let program = session.read_program_change_map()?.program(channel);
+        let written = session.write_verified(&image, None, sink)?;
+        Ok(SwitchOutcome {
+            channel,
+            program,
+            attempts: 1,
+            reloaded: true,
+            temp: written.image,
+        })
     }
 
     fn read_full_backup(&mut self, sink: &mut dyn FnMut(Event)) -> Result<FullBackup, EngineError> {

@@ -8,6 +8,13 @@ use crate::plan::{WriteOrder, plan_full_write, plan_partial_write};
 use crate::sysex::{Dt1, Rq1};
 use crate::verify::{LinkedType, VerifyRules};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelRow {
+    pub channel: Channel,
+    pub row: u8,
+    pub reload_from_row: bool,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeviceProfile {
     pub name: &'static str,
@@ -20,6 +27,7 @@ pub struct DeviceProfile {
     pub program_change_map_size: Size,
     pub editor_mode: Address,
     pub channels: &'static [Channel],
+    pub channel_rows: &'static [ChannelRow],
     pub verify_rules: VerifyRules,
     pub write_order: WriteOrder,
     pub chain_pattern: PatchOffset,
@@ -50,6 +58,13 @@ impl DeviceProfile {
 
     pub fn has_channel(&self, channel: Channel) -> bool {
         self.channels.contains(&channel)
+    }
+
+    pub fn reload_row(&self, channel: Channel) -> Option<u8> {
+        self.channel_rows
+            .iter()
+            .find(|entry| entry.channel == channel && entry.reload_from_row)
+            .map(|entry| entry.row)
     }
 
     pub fn full_write_plan(&self, image: &PatchImage) -> Result<Vec<Dt1>, ProtocolError> {
@@ -181,6 +196,34 @@ const MK2_LINKED: [LinkedType; 6] = [
     linked("delay2", PatchOffset::new(0x05, 0x21), 5, 0x3D),
 ];
 
+const MK2_50_CHANNEL_ROWS: [ChannelRow; 5] = [
+    ChannelRow {
+        channel: Channel::Panel,
+        row: 0,
+        reload_from_row: false,
+    },
+    ChannelRow {
+        channel: Channel::A1,
+        row: 1,
+        reload_from_row: true,
+    },
+    ChannelRow {
+        channel: Channel::A2,
+        row: 2,
+        reload_from_row: true,
+    },
+    ChannelRow {
+        channel: Channel::B1,
+        row: 5,
+        reload_from_row: true,
+    },
+    ChannelRow {
+        channel: Channel::B2,
+        row: 6,
+        reload_from_row: true,
+    },
+];
+
 pub static KATANA_50_MK2: DeviceProfile = DeviceProfile {
     name: "BOSS Katana 50 MK II",
     identity_signature: [0x41, 0x33, 0x03, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00],
@@ -198,6 +241,7 @@ pub static KATANA_50_MK2: DeviceProfile = DeviceProfile {
         Channel::B1,
         Channel::B2,
     ],
+    channel_rows: &MK2_50_CHANNEL_ROWS,
     verify_rules: VerifyRules {
         amp_derived: &MK2_AMP_DERIVED,
         linked_types: &MK2_LINKED,

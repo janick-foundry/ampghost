@@ -795,6 +795,26 @@ impl Ui {
                 "Backing up amp… {done} of {total}",
                 &[("done", &done.to_string()), ("total", &total.to_string())],
             ),
+            Stage::Reloading { channel } => trf(
+                "Reloading {channel} from the amp…",
+                &[("channel", channel.label())],
+            ),
+            Stage::ReadingStored {
+                channel,
+                done,
+                total,
+            } => trf(
+                "Reloading {channel} from the amp… {done} of {total}",
+                &[
+                    ("channel", channel.label()),
+                    ("done", &done.to_string()),
+                    ("total", &total.to_string()),
+                ],
+            ),
+            Stage::Bouncing { channel } => trf(
+                "Reloading {channel} by switching away and back…",
+                &[("channel", channel.label())],
+            ),
         };
         tracing::info!(?stage, "progress");
         self.show_status_now(&text);
@@ -823,7 +843,12 @@ impl Ui {
             Event::ChannelSwitched(outcome) => {
                 self.model.borrow_mut().channel = Some(outcome.channel);
                 self.set_clean_image(outcome.temp);
-                let text = if outcome.attempts > 1 {
+                let text = if outcome.reloaded {
+                    trf(
+                        "Reloaded {channel} from the amp",
+                        &[("channel", outcome.channel.label())],
+                    )
+                } else if outcome.attempts > 1 {
                     trf(
                         "Switched to {channel} after {attempts} attempts",
                         &[

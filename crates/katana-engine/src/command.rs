@@ -88,6 +88,7 @@ pub struct SwitchOutcome {
     pub channel: Channel,
     pub program: u8,
     pub attempts: u8,
+    pub reloaded: bool,
     pub temp: PatchImage,
 }
 
@@ -103,14 +104,41 @@ pub struct PresetEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
     EditorMode,
-    Writing { packets: usize },
-    Verifying { attempt: u8 },
-    Rewriting { bytes: usize },
-    WaitingForAmp { millis: u64 },
-    ProgramChange { program: u8, attempt: u8 },
-    ConfirmingChannel { attempt: u8 },
+    Writing {
+        packets: usize,
+    },
+    Verifying {
+        attempt: u8,
+    },
+    Rewriting {
+        bytes: usize,
+    },
+    WaitingForAmp {
+        millis: u64,
+    },
+    ProgramChange {
+        program: u8,
+        attempt: u8,
+    },
+    ConfirmingChannel {
+        attempt: u8,
+    },
     ReadingTemp,
-    ReadingBackup { done: usize, total: usize },
+    ReadingBackup {
+        done: usize,
+        total: usize,
+    },
+    Reloading {
+        channel: Channel,
+    },
+    ReadingStored {
+        channel: Channel,
+        done: usize,
+        total: usize,
+    },
+    Bouncing {
+        channel: Channel,
+    },
 }
 
 #[derive(Debug, Clone)]
