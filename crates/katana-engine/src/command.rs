@@ -1,4 +1,5 @@
 use katana_protocol::{Channel, Dt1, Identity, PatchImage, ProgramChangeMap, VerifyReport};
+use katana_store::FullBackup;
 
 use crate::error::EngineError;
 
@@ -17,6 +18,7 @@ pub enum Command {
     WriteChain(u8),
     SwitchChannel(Channel),
     BackupTemp { key: String },
+    ReadFullBackup,
     RestoreBackup { key: String },
     SavePreset { name: String },
     ApplyPreset { key: String },
@@ -106,6 +108,7 @@ pub enum Stage {
     ProgramChange { program: u8, attempt: u8 },
     ConfirmingChannel { attempt: u8 },
     ReadingTemp,
+    ReadingBackup { done: usize, total: usize },
 }
 
 #[derive(Debug, Clone)]
@@ -127,6 +130,7 @@ pub enum Event {
         key: String,
         image: PatchImage,
     },
+    FullBackupRead(FullBackup),
     Restored {
         key: String,
         outcome: WriteOutcome,

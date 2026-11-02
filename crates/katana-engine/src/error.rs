@@ -22,6 +22,13 @@ pub enum EngineError {
     Params(#[from] ParamsError),
     #[error("timeout waiting for the reply to RQ1 {address} ({received} packets received)")]
     Timeout { address: Address, received: usize },
+    #[error("reply to RQ1 {requested} ({expected} bytes) came from {replied} with {actual} bytes")]
+    BackupReply {
+        requested: Address,
+        expected: usize,
+        replied: Address,
+        actual: usize,
+    },
     #[error("verify failed at {} bytes: {}", .mismatches.len(), describe(.mismatches))]
     VerifyFailed { mismatches: Vec<ByteMismatch> },
     #[error("channel {0} is not available on this model")]

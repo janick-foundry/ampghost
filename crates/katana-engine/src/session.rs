@@ -154,6 +154,54 @@ impl Session {
             })
     }
 
+    pub(crate) fn read_exact(&mut self, request: Rq1) -> Result<Vec<u8>, EngineError> {
+        self.drain(self.timings.backup_gap)?;
+        tracing::debug!(address = %request.address(), size = request.size().linear(), "backup RQ1");
+        self.transport.send(&request.encode())?;
+        let start = request.address().linear();
+        let end = request.end();
+        let expected = usize::try_from(request.size().linear()).unwrap_or_default();
+        let deadline = self.clock.now() + self.timings.backup_timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(self.clock.now());
+            if remaining.is_zero() {
+                return Err(EngineError::Timeout {
+                    address: request.address(),
+                    received: 0,
+                });
+            }
+            let Some(bytes) = self.transport.receive(remaining)? else {
+                continue;
+            };
+            let packet = match decode(&bytes) {
+                Ok(Incoming::Dt1(packet)) => packet,
+                Ok(_) => continue,
+                Err(error @ ProtocolError::Checksum { address, .. })
+                    if address.linear() >= start && address.linear() < end =>
+                {
+                    return Err(error.into());
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "dropping invalid message during backup");
+                    continue;
+                }
+            };
+            let overlaps = packet.start() < end && packet.end() > start;
+            if packet.address() == request.address() && packet.data().len() == expected {
+                return Ok(packet.data().to_vec());
+            }
+            if overlaps {
+                return Err(EngineError::BackupReply {
+                    requested: request.address(),
+                    expected,
+                    replied: packet.address(),
+                    actual: packet.data().len(),
+                });
+            }
+            self.unsolicited.push(packet);
+        }
+    }
+
     pub(crate) fn read_temp(&mut self) -> Result<PatchImage, EngineError> {
         let started = self.clock.now();
         let attempts = self.timings.read_attempts.max(1);

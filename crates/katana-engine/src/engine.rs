@@ -6,13 +6,13 @@ use katana_midi::{MidiBackend, PortInfo, katana_candidates};
 use katana_params::{ParamTable, ParamsError};
 use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset, ProtocolError, verify};
 use katana_store::{
-    Preset, PresetStorage, StoreError, decode_preset, decode_syx, encode_preset, encode_syx,
-    preset_key, read_preset_summary, validate_key,
+    FullBackup, NamedBlock, Preset, PresetStorage, StoreError, decode_preset, decode_syx,
+    encode_preset, encode_syx, preset_key, read_preset_summary, validate_key,
 };
 
 use crate::clock::Clock;
 use crate::command::{
-    ChainOutcome, Command, DetectReport, Event, ParamWrite, PresetEntry, WriteOutcome,
+    ChainOutcome, Command, DetectReport, Event, ParamWrite, PresetEntry, Stage, WriteOutcome,
 };
 use crate::error::EngineError;
 use crate::session::Session;
@@ -229,6 +229,7 @@ impl Engine {
                 .switch_channel(channel, sink)
                 .map(Event::ChannelSwitched),
             Command::BackupTemp { key } => self.backup_temp(key),
+            Command::ReadFullBackup => self.read_full_backup(sink).map(Event::FullBackupRead),
             Command::RestoreBackup { key } => self.restore_backup(key, sink),
             Command::SavePreset { name } => self.save_preset(name),
             Command::ApplyPreset { key } => self.apply_preset(key, sink),
@@ -430,6 +431,59 @@ impl Engine {
         let bytes = encode_syx(&image, profile.temp_patch)?;
         self.backups.write(&key, &bytes)?;
         Ok(Event::BackupSaved { key, image })
+    }
+
+    fn read_full_backup(&mut self, sink: &mut dyn FnMut(Event)) -> Result<FullBackup, EngineError> {
+        let session = self.session()?;
+        let layout = session.profile()?.backup;
+        let mut regions = Vec::new();
+        for block in layout.system_blocks {
+            regions.push((None, block.name, block.address, block.size));
+        }
+        for row in 0..layout.stored_patch_slots {
+            if !layout.stored_patch_rows.contains(&row) {
+                continue;
+            }
+            let base = layout.stored_patch_base(row)?;
+            for block in layout.patch_blocks {
+                regions.push((
+                    Some(row),
+                    block.name,
+                    block.offset.address(base)?,
+                    block.size,
+                ));
+            }
+        }
+        let mut requests = Vec::new();
+        for &(_, _, address, size) in &regions {
+            requests.push(layout.chunk_requests(address, size)?);
+        }
+        let total = requests.iter().map(Vec::len).sum();
+        let mut done = 0;
+        let mut system = Vec::new();
+        let mut rows: Vec<Option<Vec<NamedBlock>>> =
+            vec![None; usize::from(layout.stored_patch_slots)];
+        for (&(row, name, _, _), chunks) in regions.iter().zip(requests) {
+            let mut data = Vec::new();
+            for request in chunks {
+                sink(Event::Progress(Stage::ReadingBackup { done, total }));
+                data.extend(session.read_exact(request)?);
+                done += 1;
+            }
+            let block = NamedBlock {
+                name: name.to_owned(),
+                data,
+            };
+            match row.and_then(|row| rows.get_mut(usize::from(row))) {
+                Some(slot) => slot.get_or_insert_with(Vec::new).push(block),
+                None => system.push(block),
+            }
+        }
+        sink(Event::Progress(Stage::ReadingBackup { done, total }));
+        Ok(FullBackup {
+            system,
+            user_patches: rows,
+        })
     }
 
     fn load_backup(&mut self, key: &str) -> Result<PatchImage, EngineError> {

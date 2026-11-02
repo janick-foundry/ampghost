@@ -781,7 +781,7 @@ impl Ui {
                 &[("attempt", &attempt.to_string())],
             ),
             Stage::ConfirmingChannel { .. } => tr("Verifying channel…"),
-            Stage::ReadingTemp => tr("Reading from Katana…"),
+            Stage::ReadingTemp | Stage::ReadingBackup { .. } => tr("Reading from Katana…"),
         };
         tracing::info!(?stage, "progress");
         self.show_status_now(&text);
@@ -874,7 +874,7 @@ impl Ui {
                 }
             }
             Event::Failed(error) => self.on_failed(job, &error),
-            Event::ShutDown => {}
+            Event::FullBackupRead(_) | Event::ShutDown => {}
         }
         if ended {
             self.after_job();
