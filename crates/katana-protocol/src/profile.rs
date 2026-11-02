@@ -1,4 +1,5 @@
 use crate::address::{Address, Size};
+use crate::blocks::{BackupLayout, MK2_PATCH_BLOCKS, MK2_SYSTEM_BLOCKS};
 use crate::channel::Channel;
 use crate::error::ProtocolError;
 use crate::identity::Identity;
@@ -23,6 +24,7 @@ pub struct DeviceProfile {
     pub write_order: WriteOrder,
     pub chain_pattern: PatchOffset,
     pub chain_patterns: &'static [[u8; 5]],
+    pub backup: BackupLayout,
 }
 
 impl DeviceProfile {
@@ -208,6 +210,15 @@ pub static KATANA_50_MK2: DeviceProfile = DeviceProfile {
     },
     chain_pattern: PatchOffset::new(0x06, 0x20),
     chain_patterns: &MK2_CHAIN_PATTERNS,
+    backup: BackupLayout {
+        system_blocks: &MK2_SYSTEM_BLOCKS,
+        patch_blocks: &MK2_PATCH_BLOCKS,
+        status_block: "Status",
+        stored_patch_rows: &[0, 1, 2, 5, 6],
+        stored_patch_slots: 9,
+        stored_patch_page: 0x10,
+        read_chunk: 128,
+    },
 };
 
 pub static PROFILES: [&DeviceProfile; 1] = [&KATANA_50_MK2];

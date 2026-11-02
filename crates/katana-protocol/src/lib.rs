@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod address;
+mod blocks;
 mod channel;
 mod error;
 mod identity;
@@ -11,6 +12,7 @@ mod sysex;
 mod verify;
 
 pub use address::{Address, Size};
+pub use blocks::{BackupLayout, MK2_PATCH_BLOCKS, MK2_SYSTEM_BLOCKS, PatchBlock, SystemBlock};
 pub use channel::{Channel, ProgramChangeMap, parse_current_channel};
 pub use error::ProtocolError;
 pub use identity::{IDENTITY_REQUEST, Identity};

@@ -39,6 +39,8 @@ pub enum ProtocolError {
     InvalidName(String),
     #[error("write of {len} bytes at {address} is forbidden by the device profile")]
     WriteForbidden { address: Address, len: usize },
+    #[error("stored patch row {0} does not exist")]
+    UnknownPatchRow(u8),
     #[error("chain pattern {pattern} is not one of the {count} official chain patterns")]
     InvalidChainPattern { pattern: u8, count: usize },
 }
