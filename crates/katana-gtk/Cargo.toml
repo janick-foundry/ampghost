@@ -17,6 +17,7 @@ katana-engine = { workspace = true, features = ["native"] }
 katana-midi = { workspace = true, features = ["native"] }
 katana-params.workspace = true
 katana-protocol.workspace = true
+katana-store.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

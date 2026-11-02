@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, VecDeque};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -15,10 +16,12 @@ use katana_params::ParamTable;
 use katana_protocol::{
     Channel, DeviceProfile, Dt1, KATANA_50_MK2, PatchImage, PatchOffset, parse_current_channel,
 };
+use katana_store::{FullBackup, TSL_MAX_PATCHES};
 
 use crate::blocks::{self, BlockSpec, Variant};
 use crate::bridge;
-use crate::dialogs::{self, SwitchChoice};
+use crate::dialogs::{self, SwitchChoice, ToneTarget};
+use crate::files::{self, ToneFile};
 use crate::i18n::{tr, trf};
 use crate::params_view::{self, Edit, OnChange, ParamsView, Structure};
 
@@ -34,6 +37,7 @@ enum FollowUp {
     ApplyPreset { key: String, name: String },
     Restore { key: String },
     PutBack(PatchImage),
+    SendTone { image: PatchImage, name: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +56,10 @@ enum Job {
     PutBack,
     ListPresets,
     ListBackups,
+    BackupAmp(PathBuf),
+    SaveTone(String),
+    SendTone(String),
+    ExportPresets(PathBuf),
 }
 
 impl Job {
@@ -77,6 +85,10 @@ impl Job {
             Self::DeletePreset(name) => trf("Deleting “{name}”…", &[("name", name)]),
             Self::ApplyPreset(name) => trf("Applying “{name}”…", &[("name", name)]),
             Self::PutBack => tr("Putting your edits back…"),
+            Self::BackupAmp(_) => tr("Backing up amp…"),
+            Self::SaveTone(name) => trf("Saving “{name}”…", &[("name", name)]),
+            Self::SendTone(name) => trf("Sending “{name}” to temp…", &[("name", name)]),
+            Self::ExportPresets(_) => tr("Exporting presets…"),
             Self::ListPresets | Self::ListBackups => String::new(),
         }
     }
@@ -206,6 +218,9 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         "restore",
         Box::new(|ui| ui.send(Command::ListBackups, Job::ListBackups)),
     );
+    simple("backup-amp", Box::new(Ui::choose_backup_file));
+    simple("import-tone", Box::new(Ui::choose_tone_file));
+    simple("export-presets", Box::new(Ui::prompt_export));
     simple("save-preset", Box::new(|ui| ui.prompt_save_preset(None)));
     simple("update-preset", Box::new(Ui::prompt_update_preset));
     simple("delete-preset", Box::new(Ui::prompt_delete_preset));
@@ -285,6 +300,14 @@ fn main_menu() -> gio::Menu {
     temp.append(Some(&tr("Back Up Temp Patch")), Some("win.backup"));
     temp.append(Some(&tr("Restore Backup to Temp…")), Some("win.restore"));
     menu.append_section(None, &temp);
+    let files = gio::Menu::new();
+    files.append(Some(&tr("Back Up Amp…")), Some("win.backup-amp"));
+    files.append(Some(&tr("Import Tone (.tsl)…")), Some("win.import-tone"));
+    files.append(
+        Some(&tr("Export Presets (.tsl)…")),
+        Some("win.export-presets"),
+    );
+    menu.append_section(None, &files);
     let about = gio::Menu::new();
     about.append(Some(&tr("Keyboard Shortcuts")), Some("win.shortcuts"));
     about.append(Some(&tr("About Katana Control")), Some("win.about"));
@@ -781,7 +804,11 @@ impl Ui {
                 &[("attempt", &attempt.to_string())],
             ),
             Stage::ConfirmingChannel { .. } => tr("Verifying channel…"),
-            Stage::ReadingTemp | Stage::ReadingBackup { .. } => tr("Reading from Katana…"),
+            Stage::ReadingTemp => tr("Reading from Katana…"),
+            Stage::ReadingBackup { done, total } => trf(
+                "Backing up amp… {done} of {total}",
+                &[("done", &done.to_string()), ("total", &total.to_string())],
+            ),
         };
         tracing::info!(?stage, "progress");
         self.show_status_now(&text);
@@ -805,7 +832,7 @@ impl Ui {
                 self.set_image(image);
                 self.reconcile_held();
             }
-            Event::WriteVerified(outcome) => self.on_write_verified(job.as_ref(), outcome),
+            Event::WriteVerified(outcome) => self.on_verified(job.as_ref(), outcome),
             Event::ChainWritten(outcome) => self.on_chain_written(job.as_ref(), outcome),
             Event::ChannelSwitched(outcome) => {
                 self.model.borrow_mut().channel = Some(outcome.channel);
@@ -839,7 +866,7 @@ impl Ui {
                 self.set_clean_image(outcome.image);
                 self.toast(&trf("Restored {key} to temp", &[("key", &key)]));
             }
-            Event::PresetSaved { name, .. } => self.on_preset_saved(&name),
+            Event::PresetSaved { name, .. } => self.on_saved(job.as_ref(), &name),
             Event::PresetUpdated {
                 previous,
                 key,
@@ -874,10 +901,40 @@ impl Ui {
                 }
             }
             Event::Failed(error) => self.on_failed(job, &error),
-            Event::FullBackupRead(_) | Event::ShutDown => {}
+            Event::FullBackupRead(backup) => {
+                if let Some(Job::BackupAmp(path)) = job.clone() {
+                    self.write_backup(path, backup);
+                }
+            }
+            Event::LivesetEncoded { text, patches } => self.on_liveset(job.as_ref(), text, patches),
+            Event::ShutDown => {}
         }
         if ended {
             self.after_job();
+        }
+    }
+
+    fn on_verified(&self, job: Option<&Job>, outcome: WriteOutcome) {
+        if let Some(Job::SendTone(name)) = job {
+            self.set_clean_image(outcome.image);
+            self.toast(&trf("Sent “{name}” to temp", &[("name", name)]));
+        } else {
+            self.on_write_verified(job, outcome);
+        }
+    }
+
+    fn on_saved(&self, job: Option<&Job>, name: &str) {
+        if matches!(job, Some(Job::SaveTone(_))) {
+            self.toast(&trf("Saved preset “{name}”", &[("name", name)]));
+            self.send(Command::ListPresets, Job::ListPresets);
+        } else {
+            self.on_preset_saved(name);
+        }
+    }
+
+    fn on_liveset(self: &Rc<Self>, job: Option<&Job>, text: String, patches: usize) {
+        if let Some(Job::ExportPresets(path)) = job {
+            self.write_liveset(path.clone(), text, patches);
         }
     }
 
@@ -961,6 +1018,21 @@ impl Ui {
             (Some(Job::WriteChain { .. }), _) => {
                 self.toast(&trf(
                     "Could not change the signal chain: {error}",
+                    &[("error", &error.to_string())],
+                ));
+                self.send(Command::ReadTemp, Job::ReadTemp);
+            }
+            (Some(Job::BackupAmp(_)), _) => dialogs::show_error(
+                &self.window,
+                &tr("Amp Backup Failed"),
+                &trf(
+                    "No file was written. The amp was only read, nothing was changed: {error}",
+                    &[("error", &error.to_string())],
+                ),
+            ),
+            (Some(Job::SendTone(_)), _) => {
+                self.toast(&trf(
+                    "Could not send the tone to temp: {error}",
                     &[("error", &error.to_string())],
                 ));
                 self.send(Command::ReadTemp, Job::ReadTemp);
@@ -1494,6 +1566,7 @@ impl Ui {
             FollowUp::ApplyPreset { .. } => "preset",
             FollowUp::Restore { .. } => "restore",
             FollowUp::PutBack(_) => "put-back",
+            FollowUp::SendTone { .. } => "tone",
         };
         let key = format!("auto-before-{reason}-{}.syx", Self::timestamp());
         self.send(
@@ -1511,6 +1584,9 @@ impl Ui {
             }
             FollowUp::Restore { key } => self.send(Command::RestoreBackup { key }, Job::Restore),
             FollowUp::PutBack(image) => self.send(Command::WriteTemp(image), Job::PutBack),
+            FollowUp::SendTone { image, name } => {
+                self.send(Command::WriteTemp(image), Job::SendTone(name));
+            }
         }
     }
 
@@ -1522,6 +1598,257 @@ impl Ui {
             key: entry.key,
             name: entry.name,
         });
+    }
+
+    fn file_filter(name: &str, suffix: &str) -> (gio::ListStore, gtk::FileFilter) {
+        let filter = gtk::FileFilter::new();
+        filter.set_name(Some(name));
+        filter.add_suffix(suffix);
+        let filters = gio::ListStore::new::<gtk::FileFilter>();
+        filters.append(&filter);
+        (filters, filter)
+    }
+
+    fn save_dialog(
+        self: &Rc<Self>,
+        title: &str,
+        initial: &str,
+        filter: (&str, &str),
+        on_path: impl FnOnce(&Rc<Self>, PathBuf) + 'static,
+    ) {
+        let (filters, default) = Self::file_filter(filter.0, filter.1);
+        let dialog = gtk::FileDialog::builder()
+            .title(title)
+            .modal(true)
+            .initial_name(initial)
+            .filters(&filters)
+            .default_filter(&default)
+            .build();
+        let ui = Rc::clone(self);
+        dialog.save(
+            Some(&self.window),
+            gio::Cancellable::NONE,
+            move |result| match result.map(|file| file.path()) {
+                Ok(Some(path)) => on_path(&ui, path),
+                Ok(None) => ui.toast(&tr("Choose a local file")),
+                Err(error) => tracing::debug!(%error, "save dialog closed"),
+            },
+        );
+    }
+
+    fn run_blocking<T: Send + 'static>(
+        self: &Rc<Self>,
+        work: impl FnOnce() -> Result<T> + Send + 'static,
+        done: impl FnOnce(&Rc<Self>, Result<T>) + 'static,
+    ) {
+        let ui = Rc::clone(self);
+        glib::spawn_future_local(async move {
+            let result = gio::spawn_blocking(work)
+                .await
+                .map_err(|_| anyhow::anyhow!("the file worker stopped unexpectedly"))
+                .and_then(|result| result);
+            done(&ui, result);
+        });
+    }
+
+    fn choose_backup_file(self: &Rc<Self>) {
+        if !self.can_write() || self.is_busy() {
+            return;
+        }
+        let stamp = glib::DateTime::now_local()
+            .and_then(|now| now.format("%Y%m%d-%H%M"))
+            .map_or_else(|_| "now".to_owned(), |text| text.to_string());
+        self.save_dialog(
+            &tr("Back Up Amp"),
+            &format!("katana-backup-{stamp}.alb"),
+            (&tr("BOSS TONE STUDIO backup (.alb)"), "alb"),
+            |ui, path| {
+                if !ui.can_write() || ui.is_busy() {
+                    ui.toast(&tr("The amp is busy, try again"));
+                    return;
+                }
+                ui.flush_writes_now();
+                ui.send(Command::ReadFullBackup, Job::BackupAmp(path));
+            },
+        );
+    }
+
+    fn write_backup(self: &Rc<Self>, path: PathBuf, backup: FullBackup) {
+        let target = path.clone();
+        self.run_blocking(
+            move || files::save_backup(&target, &backup),
+            move |ui, result| match result {
+                Ok(rows) => ui.toast(&trf(
+                    "Amp backed up to {file} ({rows} stored patches)",
+                    &[("file", &display_name(&path)), ("rows", &rows.to_string())],
+                )),
+                Err(error) => dialogs::show_error(
+                    &ui.window,
+                    &tr("Amp Backup Failed"),
+                    &trf(
+                        "The amp was read but the file could not be written: {error}",
+                        &[("error", &format!("{error:#}"))],
+                    ),
+                ),
+            },
+        );
+    }
+
+    fn choose_tone_file(self: &Rc<Self>) {
+        let (filters, default) = Self::file_filter(&tr("BOSS TONE STUDIO liveset (.tsl)"), "tsl");
+        let dialog = gtk::FileDialog::builder()
+            .title(tr("Import Tone"))
+            .modal(true)
+            .filters(&filters)
+            .default_filter(&default)
+            .build();
+        let ui = Rc::clone(self);
+        dialog.open(
+            Some(&self.window),
+            gio::Cancellable::NONE,
+            move |result| match result.map(|file| file.path()) {
+                Ok(Some(path)) => ui.load_tone_file(path),
+                Ok(None) => ui.toast(&tr("Choose a local file")),
+                Err(error) => tracing::debug!(%error, "open dialog closed"),
+            },
+        );
+    }
+
+    fn load_tone_file(self: &Rc<Self>, path: PathBuf) {
+        let source = path.clone();
+        self.run_blocking(
+            move || files::load_tones(&source),
+            move |ui, result| match result {
+                Ok(file) if file.tones.is_empty() => ui.toast(&tr("The file holds no patches")),
+                Ok(file) => ui.prompt_tone(file),
+                Err(error) => dialogs::show_error(
+                    &ui.window,
+                    &tr("Cannot Import Tone"),
+                    &trf(
+                        "{file}: {error}",
+                        &[
+                            ("file", &display_name(&path)),
+                            ("error", &format!("{error:#}")),
+                        ],
+                    ),
+                ),
+            },
+        );
+    }
+
+    fn prompt_tone(self: &Rc<Self>, file: ToneFile) {
+        let tones: Vec<Option<(PatchImage, String)>> = file
+            .tones
+            .iter()
+            .map(|tone| {
+                tone.loaded.as_ref().ok().map(|(image, _)| {
+                    let name = image.name().trim().to_owned();
+                    (image.clone(), name)
+                })
+            })
+            .collect();
+        let ui = Rc::clone(self);
+        dialogs::choose_tone(
+            &self.window,
+            file,
+            self.can_write(),
+            move |index, target| {
+                let Some(Some((image, name))) = tones.get(index).cloned() else {
+                    return;
+                };
+                match target {
+                    ToneTarget::Preset => ui.prompt_tone_name(image, &name),
+                    ToneTarget::Temp => {
+                        if !ui.can_write() || ui.is_busy() {
+                            ui.toast(&tr("The amp is busy, try again"));
+                            return;
+                        }
+                        let label = if name.is_empty() {
+                            tr("Imported tone")
+                        } else {
+                            name
+                        };
+                        ui.backup_then(FollowUp::SendTone { image, name: label });
+                    }
+                }
+            },
+        );
+    }
+
+    fn prompt_tone_name(self: &Rc<Self>, image: PatchImage, suggestion: &str) {
+        let ui = Rc::clone(self);
+        dialogs::ask_tone_name(&self.window, suggestion, move |name| {
+            let exists = ui
+                .model
+                .borrow()
+                .presets
+                .iter()
+                .any(|entry| entry.name.eq_ignore_ascii_case(&name));
+            let save_ui = Rc::clone(&ui);
+            let save_name = name.clone();
+            let save_image = image.clone();
+            let save = move || {
+                save_ui.send(
+                    Command::SaveImportedPreset {
+                        name: save_name.clone(),
+                        image: save_image.clone(),
+                    },
+                    Job::SaveTone(save_name.clone()),
+                );
+            };
+            if exists {
+                dialogs::confirm_replace(&ui.window, &name, save);
+            } else {
+                save();
+            }
+        });
+    }
+
+    fn prompt_export(self: &Rc<Self>) {
+        let presets = self.model.borrow().presets.clone();
+        if presets.is_empty() {
+            self.toast(&tr("No presets yet"));
+            return;
+        }
+        let ui = Rc::clone(self);
+        dialogs::choose_export(
+            &self.window,
+            &presets,
+            TSL_MAX_PATCHES,
+            move |keys, name| {
+                let initial = format!("{}.tsl", name.replace(['/', '\\'], "-"));
+                ui.save_dialog(
+                    &tr("Export Presets"),
+                    &initial,
+                    (&tr("BOSS TONE STUDIO liveset (.tsl)"), "tsl"),
+                    move |ui, path| {
+                        ui.send(
+                            Command::ExportLiveset { keys, name },
+                            Job::ExportPresets(path),
+                        );
+                    },
+                );
+            },
+        );
+    }
+
+    fn write_liveset(self: &Rc<Self>, path: PathBuf, text: String, patches: usize) {
+        let target = path.clone();
+        self.run_blocking(
+            move || files::write_atomic(&target, text.as_bytes()),
+            move |ui, result| match result {
+                Ok(()) => ui.toast(&trf(
+                    "Exported {count} preset(s) to {file}",
+                    &[
+                        ("count", &patches.to_string()),
+                        ("file", &display_name(&path)),
+                    ],
+                )),
+                Err(error) => {
+                    dialogs::show_error(&ui.window, &tr("Export Failed"), &format!("{error:#}"));
+                }
+            },
+        );
     }
 
     fn prompt_save_preset(self: &Rc<Self>, then_switch: Option<Channel>) {
@@ -1690,6 +2017,20 @@ impl Ui {
         for (name, enabled) in [
             ("update-preset", writable && !busy && chosen),
             ("delete-preset", !busy && chosen),
+        ] {
+            if let Some(action) = self
+                .window
+                .lookup_action(name)
+                .and_then(|action| action.downcast::<gio::SimpleAction>().ok())
+            {
+                action.set_enabled(enabled);
+            }
+        }
+        let has_presets = !self.model.borrow().presets.is_empty();
+        for (name, enabled) in [
+            ("backup-amp", writable && !busy),
+            ("import-tone", !busy),
+            ("export-presets", !busy && has_presets),
         ] {
             if let Some(action) = self
                 .window
@@ -2123,6 +2464,13 @@ impl Ui {
         self.params_holder.set_child(Some(&view.root));
         *self.params.borrow_mut() = Some(view);
     }
+}
+
+fn display_name(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
 }
 
 fn hex(bytes: &[u8]) -> String {

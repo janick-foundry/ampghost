@@ -894,6 +894,7 @@ dependencies = [
  "katana-midi",
  "katana-params",
  "katana-protocol",
+ "katana-store",
  "libadwaita",
  "tracing",
  "tracing-subscriber",

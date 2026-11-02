@@ -4,10 +4,13 @@ use std::time::{Duration, Instant};
 
 use katana_midi::{MidiBackend, PortInfo, katana_candidates};
 use katana_params::{ParamTable, ParamsError};
-use katana_protocol::{Dt1, LinkedType, PatchImage, PatchOffset, ProtocolError, verify};
+use katana_protocol::{
+    DeviceProfile, Dt1, KATANA_50_MK2, LinkedType, PatchImage, PatchOffset, ProtocolError, verify,
+};
 use katana_store::{
-    FullBackup, NamedBlock, Preset, PresetStorage, StoreError, decode_preset, decode_syx,
-    encode_preset, encode_syx, preset_key, read_preset_summary, validate_key,
+    FullBackup, LiveSetPatch, NamedBlock, Preset, PresetStorage, StoreError, TSL_MAX_PATCHES,
+    decode_preset, decode_syx, encode_preset, encode_syx, encode_tsl, image_to_blocks, preset_key,
+    read_preset_summary, validate_key,
 };
 
 use crate::clock::Clock;
@@ -17,6 +20,8 @@ use crate::command::{
 use crate::error::EngineError;
 use crate::session::Session;
 use crate::timings::Timings;
+
+const OFFLINE_PROFILE: &DeviceProfile = &KATANA_50_MK2;
 
 pub struct Engine {
     backend: Box<dyn MidiBackend>,
@@ -232,6 +237,8 @@ impl Engine {
             Command::ReadFullBackup => self.read_full_backup(sink).map(Event::FullBackupRead),
             Command::RestoreBackup { key } => self.restore_backup(key, sink),
             Command::SavePreset { name } => self.save_preset(name),
+            Command::SaveImportedPreset { name, image } => self.save_imported_preset(name, image),
+            Command::ExportLiveset { keys, name } => self.export_liveset(&keys, &name),
             Command::ApplyPreset { key } => self.apply_preset(key, sink),
             Command::UpdatePreset { key, name } => self.update_preset(key, name),
             Command::DeletePreset { key } => {
@@ -518,6 +525,46 @@ impl Engine {
         let text = encode_preset(&preset, profile.temp_patch)?;
         self.presets.write(&key, text.as_bytes())?;
         Ok(Event::PresetSaved { key, name })
+    }
+
+    fn save_imported_preset(
+        &mut self,
+        name: String,
+        mut image: PatchImage,
+    ) -> Result<Event, EngineError> {
+        let key = preset_key(&name)?;
+        let profile = OFFLINE_PROFILE;
+        katana_params::conform_to_official(&mut image)?;
+        let preset = Preset::new(name.clone(), profile.name, self.clock.timestamp(), image)?;
+        let text = encode_preset(&preset, profile.temp_patch)?;
+        self.presets.write(&key, text.as_bytes())?;
+        Ok(Event::PresetSaved { key, name })
+    }
+
+    fn export_liveset(&self, keys: &[String], name: &str) -> Result<Event, EngineError> {
+        if keys.is_empty() {
+            return Err(StoreError::NoPatches.into());
+        }
+        if keys.len() > TSL_MAX_PATCHES {
+            return Err(StoreError::TooManyPatches(keys.len(), TSL_MAX_PATCHES).into());
+        }
+        let profile = OFFLINE_PROFILE;
+        let mut patches = Vec::new();
+        for key in keys {
+            validate_key(key)?;
+            let text = String::from_utf8(self.presets.read(key)?)
+                .map_err(|_| EngineError::PresetEncoding)?;
+            let preset = decode_preset(&text, &profile.patch_layout, profile.temp_patch)?;
+            patches.push(LiveSetPatch {
+                memo: String::new(),
+                blocks: image_to_blocks(&preset.image, &profile.backup)?,
+            });
+        }
+        let text = encode_tsl(name, &patches)?;
+        Ok(Event::LivesetEncoded {
+            text,
+            patches: patches.len(),
+        })
     }
 
     fn update_preset(&mut self, previous: String, name: String) -> Result<Event, EngineError> {

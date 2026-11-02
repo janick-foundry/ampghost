@@ -3,6 +3,7 @@
 mod blocks;
 mod bridge;
 mod dialogs;
+mod files;
 mod i18n;
 mod params_view;
 mod window;
