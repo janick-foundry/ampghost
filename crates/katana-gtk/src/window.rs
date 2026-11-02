@@ -2575,6 +2575,7 @@ fn build_channels() -> (adw::Clamp, Vec<(Channel, gtk::Button)>) {
     let channel_row = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .homogeneous(true)
+        .halign(gtk::Align::Start)
         .css_classes(["linked", "channel-row"])
         .build();
     let mut channel_buttons = Vec::new();
