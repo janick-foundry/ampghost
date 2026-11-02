@@ -302,7 +302,7 @@ fn main_menu() -> gio::Menu {
     menu.append_section(None, &temp);
     let files = gio::Menu::new();
     files.append(Some(&tr("Back Up Amp…")), Some("win.backup-amp"));
-    files.append(Some(&tr("Import Tone (.tsl)…")), Some("win.import-tone"));
+    files.append(Some(&tr("Import Presets (.tsl)…")), Some("win.import-tone"));
     files.append(
         Some(&tr("Export Presets (.tsl)…")),
         Some("win.export-presets"),
@@ -1697,7 +1697,7 @@ impl Ui {
     fn choose_tone_file(self: &Rc<Self>) {
         let (filters, default) = Self::file_filter(&tr("BOSS TONE STUDIO liveset (.tsl)"), "tsl");
         let dialog = gtk::FileDialog::builder()
-            .title(tr("Import Tone"))
+            .title(tr("Import Preset"))
             .modal(true)
             .filters(&filters)
             .default_filter(&default)
@@ -1723,7 +1723,7 @@ impl Ui {
                 Ok(file) => ui.prompt_tone(file),
                 Err(error) => dialogs::show_error(
                     &ui.window,
-                    &tr("Cannot Import Tone"),
+                    &tr("Cannot Import Preset"),
                     &trf(
                         "{file}: {error}",
                         &[
@@ -1764,7 +1764,7 @@ impl Ui {
                             return;
                         }
                         let label = if name.is_empty() {
-                            tr("Imported tone")
+                            tr("Imported preset")
                         } else {
                             name
                         };

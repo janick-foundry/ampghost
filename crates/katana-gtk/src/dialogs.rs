@@ -210,7 +210,7 @@ pub fn choose_tone(
 ) {
     let count = file.tones.len().to_string();
     let dialog = adw::AlertDialog::new(
-        Some(&tr("Import Tone")),
+        Some(&tr("Import Preset")),
         Some(&trf(
             "Liveset “{name}” holds {count} patch(es). Saving as a preset stays on this computer. Sending to temp replaces the current sound in the amp’s temporary patch after backing it up. Amp channels are not changed.",
             &[("name", &file.name), ("count", &count)],
@@ -285,7 +285,7 @@ pub fn ask_tone_name(
     on_name: impl Fn(String) + 'static,
 ) {
     let dialog = adw::AlertDialog::new(
-        Some(&tr("Save Tone as Preset")),
+        Some(&tr("Save as Local Preset")),
         Some(&tr(
             "The imported tone is stored on this computer. The amp is not changed.",
         )),
