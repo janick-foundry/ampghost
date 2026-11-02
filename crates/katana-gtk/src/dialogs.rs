@@ -255,7 +255,7 @@ pub fn ask_tone_name(
     let dialog = adw::AlertDialog::new(
         Some(&tr("Save as Local Preset")),
         Some(&tr(
-            "The imported tone is stored on this computer. The amp is not changed.",
+            "The imported preset is stored on this computer. The amp is not changed.",
         )),
     );
     let entry = gtk::Entry::builder()

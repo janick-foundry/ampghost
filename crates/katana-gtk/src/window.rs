@@ -1007,7 +1007,7 @@ impl Ui {
             ),
             (Some(Job::SendTone(_)), _) => {
                 self.toast(&trf(
-                    "Could not send the tone to temp: {error}",
+                    "Could not send the preset to temp: {error}",
                     &[("error", &error.to_string())],
                 ));
                 self.send(Command::ReadTemp, Job::ReadTemp);
@@ -1534,7 +1534,7 @@ impl Ui {
         let reason = match follow_up {
             FollowUp::ApplyPreset { .. } => "preset",
             FollowUp::PutBack(_) => "put-back",
-            FollowUp::SendTone { .. } => "tone",
+            FollowUp::SendTone { .. } => "import",
         };
         let key = format!("auto-before-{reason}-{}.syx", Self::timestamp());
         self.send(Command::BackupTemp { key }, Job::Backup(follow_up));
@@ -1951,13 +1951,11 @@ impl Ui {
             } else {
                 button.remove_css_class("suggested-action");
             }
-            let available = profile.is_some_and(|profile| profile.has_channel(*channel));
-            let tooltip = if available {
-                trf("Switch to {channel}", &[("channel", channel.label())])
-            } else {
-                tr("Not available on this amp")
-            };
-            button.set_tooltip_text(Some(&tooltip));
+            button.set_visible(profile.unwrap_or(&KATANA_50_MK2).has_channel(*channel));
+            button.set_tooltip_text(Some(&trf(
+                "Switch to {channel}",
+                &[("channel", channel.label())],
+            )));
         }
     }
 
@@ -1971,8 +1969,8 @@ impl Ui {
             .as_ref()
             .and_then(|device| device.profile);
         for (channel, button) in &self.channel_buttons {
-            let available = profile.is_some_and(|profile| profile.has_channel(*channel));
-            button.set_sensitive(writable && available && !busy);
+            let available = profile.unwrap_or(&KATANA_50_MK2).has_channel(*channel);
+            button.set_sensitive(writable && available && profile.is_some() && !busy);
         }
         self.preset_list.set_sensitive(writable && !busy);
         let chosen = self.chosen_entry().is_some();
