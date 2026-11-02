@@ -2,6 +2,7 @@
 
 mod cli;
 mod driver;
+mod files;
 mod output;
 
 use std::process::ExitCode;

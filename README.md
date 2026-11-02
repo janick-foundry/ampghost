@@ -65,7 +65,20 @@ katana-cli preset-save "My Lead"
 katana-cli preset-apply "My Lead"
 katana-cli preset-list
 katana-cli switch-channel B1 --discard-temp
+katana-cli backup-all --out FILE.alb [--replace]
+katana-cli backup-all --plan
+katana-cli alb-info FILE.alb
+katana-cli tsl-export --out FILE.tsl [--name LIVESET] PRESET...
+katana-cli tsl-export --out FILE.tsl --from-temp
+katana-cli tsl-import FILE.tsl [--index N] [--name NAME] [--replace] [--dry-run]
+katana-cli tsl-import FILE.tsl --index N --to-temp
 ```
+
+`backup-all` is read only: it sends RQ1 requests for System and the stored patch rows the model
+has, one at a time, and saves a BOSS TONE STUDIO `.alb` file. There is no full restore.
+`backup-all --plan`, `alb-info`, `tsl-export PRESET...` and `tsl-import` into presets run
+without the amp. `tsl-import` checks the device, block lengths and official ranges, ignores the
+Status block and fills blocks missing from older files with the factory defaults.
 
 Presets and default backups live in the user data directory for the app id
 `io.github.janfoundry.KatanaControl`.

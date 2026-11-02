@@ -15,6 +15,7 @@ use katana_store::{
 };
 
 use crate::cli::{Action, Args};
+use crate::files::{self, key_for, load_tsl_images, save_alb, save_tsl, temp_liveset};
 use crate::output::{
     print_chain_outcome, print_detect, print_dump, print_image, print_outcome, sha256_hex,
 };
@@ -29,6 +30,9 @@ pub fn run(args: Args) -> Result<()> {
         None => default_data_dir().context("no user data directory available")?,
     };
     let presets = FileStorage::new(data_dir.join("presets")).with_extension(".json");
+    if let Some(result) = files::offline(&args.command, &presets) {
+        return result;
+    }
     if let Action::PresetDerive {
         from,
         name,
@@ -228,6 +232,47 @@ impl Driver {
                     other => bail!("unexpected engine event {other:?}"),
                 }
             }
+            other => self.execute_files(other)?,
+        }
+        Ok(())
+    }
+
+    fn execute_files(&mut self, action: Action) -> Result<()> {
+        match action {
+            Action::BackupAll { out, replace, .. } => {
+                let out = out.context("backup-all needs --out FILE.alb, or --plan")?;
+                if !replace && out.exists() {
+                    bail!(
+                        "{} already exists; pass --replace to overwrite it",
+                        out.display()
+                    );
+                }
+                match self.request(Command::ReadFullBackup)? {
+                    Event::FullBackupRead(backup) => save_alb(&backup, &out, replace)?,
+                    other => bail!("unexpected engine event {other:?}"),
+                }
+            }
+            Action::TslExport {
+                out, name, replace, ..
+            } => {
+                let image = self.read_temp()?;
+                let liveset = name.unwrap_or_else(|| image.name());
+                save_tsl(&liveset, &temp_liveset(&image)?, &out, replace)?;
+            }
+            Action::TslImport { file, index, .. } => {
+                let mut images = load_tsl_images(&file, index)?;
+                if images.len() != 1 {
+                    bail!("--to-temp writes one patch, pick it with --index");
+                }
+                let Some((_, image)) = images.pop() else {
+                    bail!("no patch selected");
+                };
+                match self.request(Command::WriteTemp(image))? {
+                    Event::WriteVerified(outcome) => print_outcome(&outcome),
+                    other => bail!("unexpected engine event {other:?}"),
+                }
+            }
+            _ => bail!("this command runs without the amp"),
         }
         Ok(())
     }
@@ -354,17 +399,6 @@ fn derive_preset(mut presets: FileStorage, request: &DeriveRequest) -> Result<()
         preset.image.name()
     );
     Ok(())
-}
-
-fn key_for(name: &str) -> Result<String> {
-    if Path::new(name)
-        .extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
-    {
-        Ok(name.to_owned())
-    } else {
-        Ok(preset_key(name)?)
-    }
 }
 
 fn parse_value(param: &Param, text: &str) -> Result<u16> {

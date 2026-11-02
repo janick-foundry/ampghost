@@ -66,6 +66,44 @@ pub enum Action {
         #[arg(long)]
         replace: bool,
     },
+    BackupAll {
+        #[arg(long, value_name = "FILE.alb")]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        replace: bool,
+        #[arg(long)]
+        plan: bool,
+    },
+    AlbInfo {
+        #[arg(value_name = "FILE.alb")]
+        file: PathBuf,
+    },
+    TslExport {
+        #[arg(long, value_name = "FILE.tsl")]
+        out: PathBuf,
+        #[arg(long, value_name = "LIVESET")]
+        name: Option<String>,
+        #[arg(long, conflicts_with = "presets")]
+        from_temp: bool,
+        #[arg(long)]
+        replace: bool,
+        #[arg(value_name = "PRESET")]
+        presets: Vec<String>,
+    },
+    TslImport {
+        #[arg(value_name = "FILE.tsl")]
+        file: PathBuf,
+        #[arg(long)]
+        index: Option<usize>,
+        #[arg(long, conflicts_with_all = ["name", "replace", "dry_run"])]
+        to_temp: bool,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        replace: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     SwitchChannel {
         channel: Channel,
         #[arg(long)]
