@@ -138,7 +138,7 @@ fn hex(bytes: &[u8]) -> String {
         .join(" ")
 }
 
-fn unhex(text: &str) -> Result<Vec<u8>, StoreError> {
+pub(crate) fn unhex(text: &str) -> Result<Vec<u8>, StoreError> {
     text.split_ascii_whitespace()
         .map(|token| u8::from_str_radix(token, 16).map_err(|_| StoreError::Hex(token.to_owned())))
         .collect()
