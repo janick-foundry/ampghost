@@ -35,7 +35,6 @@ type Handler = Box<dyn Fn(&Rc<Ui>)>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum FollowUp {
     ApplyPreset { key: String, name: String },
-    Restore { key: String },
     PutBack(PatchImage),
     SendTone { image: PatchImage, name: String },
 }
@@ -47,15 +46,13 @@ enum Job {
     WriteParams,
     WriteChain { undo: bool },
     Switch(Channel),
-    Backup { then: Option<FollowUp> },
-    Restore,
+    Backup(FollowUp),
     SavePreset,
     UpdatePreset(String),
     DeletePreset(String),
     ApplyPreset(String),
     PutBack,
     ListPresets,
-    ListBackups,
     BackupAmp(PathBuf),
     SaveTone(String),
     SendTone(String),
@@ -64,7 +61,7 @@ enum Job {
 
 impl Job {
     fn shows_status(&self) -> bool {
-        !matches!(self, Self::ListPresets | Self::ListBackups)
+        !matches!(self, Self::ListPresets)
     }
 
     fn status_text(&self) -> String {
@@ -77,9 +74,7 @@ impl Job {
             Self::Switch(channel) => {
                 trf("Switching to {channel}…", &[("channel", channel.label())])
             }
-            Self::Backup { then: None } => tr("Backing up temp…"),
-            Self::Backup { then: Some(_) } => tr("Backing up current sound…"),
-            Self::Restore => tr("Restoring backup…"),
+            Self::Backup(_) => tr("Backing up current sound…"),
             Self::SavePreset => tr("Saving preset…"),
             Self::UpdatePreset(name) => trf("Updating “{name}”…", &[("name", name)]),
             Self::DeletePreset(name) => trf("Deleting “{name}”…", &[("name", name)]),
@@ -89,7 +84,7 @@ impl Job {
             Self::SaveTone(name) => trf("Saving “{name}”…", &[("name", name)]),
             Self::SendTone(name) => trf("Sending “{name}” to temp…", &[("name", name)]),
             Self::ExportPresets(_) => tr("Exporting presets…"),
-            Self::ListPresets | Self::ListBackups => String::new(),
+            Self::ListPresets => String::new(),
         }
     }
 }
@@ -212,12 +207,7 @@ fn install_actions(app: &adw::Application, ui: &Rc<Ui>) {
         "reconnect",
         Box::new(|ui| ui.send(Command::Detect, Job::Detect)),
     );
-    simple("backup", Box::new(|ui| ui.backup_temp()));
     simple("put-back-edits", Box::new(|ui| ui.put_back_edits()));
-    simple(
-        "restore",
-        Box::new(|ui| ui.send(Command::ListBackups, Job::ListBackups)),
-    );
     simple("backup-amp", Box::new(Ui::choose_backup_file));
     simple("import-tone", Box::new(Ui::choose_tone_file));
     simple("export-presets", Box::new(Ui::prompt_export));
@@ -296,10 +286,6 @@ fn main_menu() -> gio::Menu {
     amp.append(Some(&tr("Reload From Amp")), Some("win.reload"));
     amp.append(Some(&tr("Reconnect")), Some("win.reconnect"));
     menu.append_section(None, &amp);
-    let temp = gio::Menu::new();
-    temp.append(Some(&tr("Back Up Temp Patch")), Some("win.backup"));
-    temp.append(Some(&tr("Restore Backup to Temp…")), Some("win.restore"));
-    menu.append_section(None, &temp);
     let files = gio::Menu::new();
     files.append(Some(&tr("Back Up Amp…")), Some("win.backup-amp"));
     files.append(Some(&tr("Import Presets (.tsl)…")), Some("win.import-tone"));
@@ -855,16 +841,15 @@ impl Ui {
             }
             Event::BackupSaved { key, image } => {
                 self.set_image(image);
-                match job {
-                    Some(Job::Backup {
-                        then: Some(follow_up),
-                    }) => self.run_follow_up(follow_up),
-                    _ => self.toast(&trf("Temp backed up as {key}", &[("key", &key)])),
+                if let Some(Job::Backup(follow_up)) = job {
+                    self.run_follow_up(follow_up);
+                } else {
+                    tracing::info!(%key, "temp backed up");
                 }
             }
             Event::Restored { key, outcome } => {
                 self.set_clean_image(outcome.image);
-                self.toast(&trf("Restored {key} to temp", &[("key", &key)]));
+                tracing::info!(%key, "restored to temp");
             }
             Event::PresetSaved { name, .. } => self.on_saved(job.as_ref(), &name),
             Event::PresetUpdated {
@@ -889,17 +874,7 @@ impl Ui {
                 self.model.borrow_mut().presets = entries;
                 self.rebuild_presets();
             }
-            Event::Backups(mut keys) => {
-                keys.reverse();
-                if keys.is_empty() {
-                    self.toast(&tr("No backups yet"));
-                } else {
-                    let ui = Rc::clone(self);
-                    dialogs::choose_backup(&self.window, keys, move |key| {
-                        ui.backup_then(FollowUp::Restore { key });
-                    });
-                }
-            }
+            Event::Backups(keys) => tracing::debug!(count = keys.len(), "backups listed"),
             Event::Failed(error) => self.on_failed(job, &error),
             Event::FullBackupRead(backup) => {
                 if let Some(Job::BackupAmp(path)) = job.clone() {
@@ -1001,7 +976,7 @@ impl Ui {
                 self.toasts.add_toast(toast);
                 self.send(Command::Detect, Job::Detect);
             }
-            (Some(Job::Backup { then: Some(_) }), _) => {
+            (Some(Job::Backup(_)), _) => {
                 self.toast(&trf(
                     "Could not back up the current sound, nothing was changed: {error}",
                     &[("error", &error.to_string())],
@@ -1327,7 +1302,7 @@ impl Ui {
             && self.jobs.borrow().iter().all(|job| {
                 matches!(
                     job,
-                    Job::WriteChain { .. } | Job::WriteParams | Job::ListPresets | Job::ListBackups
+                    Job::WriteChain { .. } | Job::WriteParams | Job::ListPresets
                 )
             })
     }
@@ -1554,27 +1529,15 @@ impl Ui {
             .map_or_else(|_| "now".to_owned(), |text| text.to_string())
     }
 
-    fn backup_temp(&self) {
-        self.flush_writes_now();
-        let key = format!("temp-{}.syx", Self::timestamp());
-        self.send(Command::BackupTemp { key }, Job::Backup { then: None });
-    }
-
     fn backup_then(&self, follow_up: FollowUp) {
         self.flush_writes_now();
         let reason = match follow_up {
             FollowUp::ApplyPreset { .. } => "preset",
-            FollowUp::Restore { .. } => "restore",
             FollowUp::PutBack(_) => "put-back",
             FollowUp::SendTone { .. } => "tone",
         };
         let key = format!("auto-before-{reason}-{}.syx", Self::timestamp());
-        self.send(
-            Command::BackupTemp { key },
-            Job::Backup {
-                then: Some(follow_up),
-            },
-        );
+        self.send(Command::BackupTemp { key }, Job::Backup(follow_up));
     }
 
     fn run_follow_up(&self, follow_up: FollowUp) {
@@ -1582,7 +1545,6 @@ impl Ui {
             FollowUp::ApplyPreset { key, name } => {
                 self.send(Command::ApplyPreset { key }, Job::ApplyPreset(name));
             }
-            FollowUp::Restore { key } => self.send(Command::RestoreBackup { key }, Job::Restore),
             FollowUp::PutBack(image) => self.send(Command::WriteTemp(image), Job::PutBack),
             FollowUp::SendTone { image, name } => {
                 self.send(Command::WriteTemp(image), Job::SendTone(name));
@@ -2040,7 +2002,7 @@ impl Ui {
                 action.set_enabled(enabled);
             }
         }
-        for name in ["backup", "restore", "save-preset", "reload"] {
+        for name in ["save-preset", "reload"] {
             if let Some(action) = self
                 .window
                 .lookup_action(name)

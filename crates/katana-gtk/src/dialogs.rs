@@ -156,38 +156,6 @@ pub fn confirm_delete(parent: &impl IsA<gtk::Widget>, name: &str, on_yes: impl F
     dialog.present(Some(parent));
 }
 
-pub fn choose_backup(
-    parent: &impl IsA<gtk::Widget>,
-    keys: Vec<String>,
-    on_key: impl Fn(String) + 'static,
-) {
-    let dialog = adw::AlertDialog::new(
-        Some(&tr("Restore Backup to Temp?")),
-        Some(&tr(
-            "The chosen backup replaces the current sound in the amp’s temporary patch. The current sound is backed up first. Amp channels are not changed.",
-        )),
-    );
-    let labels: Vec<&str> = keys.iter().map(String::as_str).collect();
-    let dropdown = gtk::DropDown::from_strings(&labels);
-    dropdown.update_property(&[gtk::accessible::Property::Label(&tr("Backup"))]);
-    dialog.set_extra_child(Some(&dropdown));
-    dialog.add_responses(&[("cancel", &tr("Cancel")), ("restore", &tr("Restore"))]);
-    dialog.set_response_appearance("restore", adw::ResponseAppearance::Destructive);
-    dialog.set_default_response(Some("cancel"));
-    dialog.set_close_response("cancel");
-    dialog.connect_response(None, move |_, response| {
-        let chosen = usize::try_from(dropdown.selected())
-            .ok()
-            .and_then(|index| keys.get(index));
-        if response == "restore"
-            && let Some(key) = chosen
-        {
-            on_key(key.clone());
-        }
-    });
-    dialog.present(Some(parent));
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToneTarget {
     Preset,
