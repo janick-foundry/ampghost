@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Katana Control
+Name=Tsuba
 Comment=Edit the sound of a BOSS Katana MK II amplifier
 Exec=tsuba
 Icon=io.github.janick_foundry.Tsuba

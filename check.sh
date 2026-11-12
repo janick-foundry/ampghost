@@ -15,7 +15,7 @@ cargo build --workspace
 
 step "cargo deny check"
 if ! cargo deny check; then
-    if [[ "${KATANA_DENY_OFFLINE:-0}" == "1" ]]; then
+    if [[ "${TSUBA_DENY_OFFLINE:-0}" == "1" ]]; then
         printf 'advisory database unavailable, retrying offline without advisories\n'
         cargo deny check --disable-fetch bans licenses sources
     else

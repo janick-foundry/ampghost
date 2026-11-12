@@ -300,7 +300,7 @@ pub fn choose_export(
     );
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
     let entry = gtk::Entry::builder()
-        .text(tr("Katana Control"))
+        .text(tr("Tsuba"))
         .placeholder_text(tr("Liveset Name"))
         .build();
     entry.update_property(&[gtk::accessible::Property::Label(&tr("Liveset Name"))]);
@@ -437,7 +437,7 @@ pub fn shortcuts(parent: &impl IsA<gtk::Widget>) {
 
 pub fn about(parent: &impl IsA<gtk::Widget>) {
     let dialog = adw::AboutDialog::builder()
-        .application_name(tr("Katana Control"))
+        .application_name(tr("Tsuba"))
         .application_icon(APP_ID)
         .developer_name("Jan Klíma")
         .developers(vec!["Jan Klíma"])
