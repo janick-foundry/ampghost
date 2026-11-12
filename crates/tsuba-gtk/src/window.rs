@@ -2117,7 +2117,7 @@ impl Ui {
             row.add_css_class("preset-row");
             row.add_suffix(
                 &gtk::Image::builder()
-                    .icon_name("katana-upload-symbolic")
+                    .icon_name("tsuba-upload-symbolic")
                     .valign(gtk::Align::Center)
                     .css_classes(["preset-apply"])
                     .accessible_role(gtk::AccessibleRole::Presentation)

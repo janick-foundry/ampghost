@@ -81,7 +81,7 @@ without the amp. `tsl-import` checks the device, block lengths and official rang
 Status block and fills blocks missing from older files with the factory defaults.
 
 Presets and default backups live in the user data directory for the app id
-`io.github.janfoundry.KatanaControl`.
+`io.github.janick_foundry.Tsuba`.
 
 ## License
 

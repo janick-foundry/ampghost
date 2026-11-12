@@ -20,4 +20,4 @@ pub use error::EngineError;
 pub use native::{EngineHandle, FileStorage, SystemClock, default_data_dir, spawn};
 pub use timings::Timings;
 
-pub const APP_ID: &str = "io.github.janfoundry.KatanaControl";
+pub const APP_ID: &str = "io.github.janick_foundry.Tsuba";

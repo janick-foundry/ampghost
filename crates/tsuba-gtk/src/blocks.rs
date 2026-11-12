@@ -98,7 +98,7 @@ const fn block(
         select_param,
         param_blocks,
         subs: Subs::Shared,
-        icon: "katana-fx-symbolic",
+        icon: "tsuba-fx-symbolic",
         category: Category::Other,
         passive: false,
         mini: false,
@@ -153,7 +153,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             Some("select_booster"),
             &["booster"],
         ),
-        "katana-booster-symbolic",
+        "tsuba-booster-symbolic",
         Category::Drive,
     ),
     look(
@@ -166,7 +166,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             Some("select_mod"),
             &["mod"],
         )),
-        "katana-mod-symbolic",
+        "tsuba-mod-symbolic",
         Category::Modulation,
     ),
     look(
@@ -179,7 +179,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             None,
             &["amp"],
         ),
-        "katana-amp-symbolic",
+        "tsuba-amp-symbolic",
         Category::Amp,
     ),
     look(
@@ -192,7 +192,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             None,
             &["eq1"],
         ),
-        "katana-eq-symbolic",
+        "tsuba-eq-symbolic",
         Category::Amp,
     ),
     look(
@@ -205,7 +205,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             None,
             &["eq2"],
         ),
-        "katana-eq-symbolic",
+        "tsuba-eq-symbolic",
         Category::Amp,
     ),
     look(
@@ -218,7 +218,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             Some("select_fx"),
             &["fx"],
         )),
-        "katana-fx-symbolic",
+        "tsuba-fx-symbolic",
         Category::Modulation,
     ),
     look(
@@ -231,7 +231,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             Some("select_delay1"),
             &["delay1"],
         ),
-        "katana-delay-symbolic",
+        "tsuba-delay-symbolic",
         Category::Ambient,
     ),
     look(
@@ -244,7 +244,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             Some("select_reverb"),
             &["delay2"],
         ),
-        "katana-delay2-symbolic",
+        "tsuba-delay2-symbolic",
         Category::Ambient,
     ),
     look(
@@ -257,7 +257,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             Some("select_reverb"),
             &["reverb"],
         ),
-        "katana-reverb-symbolic",
+        "tsuba-reverb-symbolic",
         Category::Ambient,
     ),
     look(
@@ -270,7 +270,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             None,
             &["send_return"],
         ),
-        "katana-send-return-symbolic",
+        "tsuba-send-return-symbolic",
         Category::Other,
     ),
     look(
@@ -283,17 +283,17 @@ pub static BLOCKS: [BlockSpec; 16] = [
             None,
             &["noise_gate"],
         ),
-        "katana-gate-symbolic",
+        "tsuba-gate-symbolic",
         Category::Amp,
     ),
     passive(look(
         block("pedal_fx", "Pedal FX", Some("PDL"), None, None, None, &[]),
-        "katana-pedal-fx-symbolic",
+        "tsuba-pedal-fx-symbolic",
         Category::Other,
     )),
     mini(look(
         block("cab", "Cabinet", Some("CAB"), None, None, None, &[]),
-        "katana-cab-symbolic",
+        "tsuba-cab-symbolic",
         Category::Other,
     )),
     look(
@@ -306,7 +306,7 @@ pub static BLOCKS: [BlockSpec; 16] = [
             None,
             &["solo"],
         ),
-        "katana-solo-symbolic",
+        "tsuba-solo-symbolic",
         Category::Other,
     ),
     look(
@@ -319,12 +319,12 @@ pub static BLOCKS: [BlockSpec; 16] = [
             None,
             &["contour"],
         )),
-        "katana-contour-symbolic",
+        "tsuba-contour-symbolic",
         Category::Other,
     ),
     look(
         block("patch", "Patch", None, None, None, None, &["master", "cab"]),
-        "katana-patch-symbolic",
+        "tsuba-patch-symbolic",
         Category::Other,
     ),
 ];

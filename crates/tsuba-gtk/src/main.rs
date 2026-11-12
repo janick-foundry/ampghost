@@ -15,7 +15,7 @@ use tsuba_engine::APP_ID;
 fn main() -> glib::ExitCode {
     init_tracing();
     i18n::init();
-    if let Err(error) = gio::resources_register_include!("tsuba-gtk.gresource") {
+    if let Err(error) = gio::resources_register_include!("tsuba.gresource") {
         tracing::error!(%error, "registering resources failed");
         return glib::ExitCode::FAILURE;
     }

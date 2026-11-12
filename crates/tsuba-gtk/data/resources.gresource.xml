@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-  <gresource prefix="/io/github/janfoundry/KatanaControl">
+  <gresource prefix="/io/github/janick_foundry/Tsuba">
     <file>style.css</file>
-    <file alias="icons/scalable/apps/io.github.janfoundry.KatanaControl.svg">icons/hicolor/scalable/apps/io.github.janfoundry.KatanaControl.svg</file>
-    <file alias="icons/symbolic/apps/io.github.janfoundry.KatanaControl-symbolic.svg">icons/hicolor/symbolic/apps/io.github.janfoundry.KatanaControl-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-amp-symbolic.svg">icons/hicolor/symbolic/actions/katana-amp-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-booster-symbolic.svg">icons/hicolor/symbolic/actions/katana-booster-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-cab-symbolic.svg">icons/hicolor/symbolic/actions/katana-cab-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-contour-symbolic.svg">icons/hicolor/symbolic/actions/katana-contour-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-delay-symbolic.svg">icons/hicolor/symbolic/actions/katana-delay-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-delay2-symbolic.svg">icons/hicolor/symbolic/actions/katana-delay2-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-eq-symbolic.svg">icons/hicolor/symbolic/actions/katana-eq-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-fx-symbolic.svg">icons/hicolor/symbolic/actions/katana-fx-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-gate-symbolic.svg">icons/hicolor/symbolic/actions/katana-gate-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-mod-symbolic.svg">icons/hicolor/symbolic/actions/katana-mod-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-patch-symbolic.svg">icons/hicolor/symbolic/actions/katana-patch-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-pedal-fx-symbolic.svg">icons/hicolor/symbolic/actions/katana-pedal-fx-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-reverb-symbolic.svg">icons/hicolor/symbolic/actions/katana-reverb-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-send-return-symbolic.svg">icons/hicolor/symbolic/actions/katana-send-return-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-solo-symbolic.svg">icons/hicolor/symbolic/actions/katana-solo-symbolic.svg</file>
-    <file alias="icons/scalable/actions/katana-upload-symbolic.svg">icons/hicolor/symbolic/actions/katana-upload-symbolic.svg</file>
+    <file alias="icons/scalable/apps/io.github.janick_foundry.Tsuba.svg">icons/hicolor/scalable/apps/io.github.janick_foundry.Tsuba.svg</file>
+    <file alias="icons/symbolic/apps/io.github.janick_foundry.Tsuba-symbolic.svg">icons/hicolor/symbolic/apps/io.github.janick_foundry.Tsuba-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-amp-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-amp-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-booster-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-booster-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-cab-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-cab-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-contour-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-contour-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-delay-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-delay-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-delay2-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-delay2-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-eq-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-eq-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-fx-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-fx-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-gate-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-gate-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-mod-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-mod-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-patch-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-patch-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-pedal-fx-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-pedal-fx-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-reverb-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-reverb-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-send-return-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-send-return-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-solo-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-solo-symbolic.svg</file>
+    <file alias="icons/scalable/actions/tsuba-upload-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-upload-symbolic.svg</file>
   </gresource>
 </gresources>
