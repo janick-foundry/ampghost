@@ -3,7 +3,7 @@ use tsuba_protocol::{Address, Dt1, PatchImage, PatchLayout};
 
 use crate::error::StoreError;
 
-pub const PRESET_FORMAT: &str = "katana-control-preset";
+pub const PRESET_FORMAT: &str = "tsuba-preset";
 pub const PRESET_VERSION: u32 = 1;
 
 const NAME_LIMIT: usize = 64;
