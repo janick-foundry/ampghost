@@ -42,9 +42,9 @@ if [[ "$count" != "1" ]]; then
     exit 1
 fi
 
-step "core crates stay GUI free (katana-gtk excluded)"
-if cargo tree --workspace --exclude katana-gtk -e normal --prefix none | rg -q '^(gtk|glib|gdk|gio|gsk|pango|cairo|libadwaita|adw|gettext)'; then
-    printf 'GUI dependencies found outside katana-gtk\n' >&2
+step "core crates stay GUI free (tsuba-gtk excluded)"
+if cargo tree --workspace --exclude tsuba-gtk -e normal --prefix none | rg -q '^(gtk|glib|gdk|gio|gsk|pango|cairo|libadwaita|adw|gettext)'; then
+    printf 'GUI dependencies found outside tsuba-gtk\n' >&2
     exit 1
 fi
 

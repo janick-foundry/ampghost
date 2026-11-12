@@ -19,13 +19,13 @@ Saving the temporary patch to an amp channel is not implemented.
 
 | Crate | Purpose |
 | --- | --- |
-| `katana-protocol` | Roland SysEx frames, addresses, identity, device profiles, write plans, verification |
-| `katana-params` | Parameter table derived from Katana Mk2 FxFloorBoard (see its NOTICE) |
-| `katana-midi` | `MidiTransport` trait, midir backend behind the `native` feature |
-| `katana-store` | Preset JSON and `.syx` backup formats, `PresetStorage` trait |
-| `katana-engine` | Commands and events, sessions, file storage and engine thread (`native`) |
-| `katana-cli` | Diagnostic command line tool |
-| `katana-gtk` | GTK 4 / libadwaita desktop app (the only crate with GUI dependencies) |
+| `tsuba-protocol` | Roland SysEx frames, addresses, identity, device profiles, write plans, verification |
+| `tsuba-params` | Parameter table derived from Katana Mk2 FxFloorBoard (see its NOTICE) |
+| `tsuba-midi` | `MidiTransport` trait, midir backend behind the `native` feature |
+| `tsuba-store` | Preset JSON and `.syx` backup formats, `PresetStorage` trait |
+| `tsuba-engine` | Commands and events, sessions, file storage and engine thread (`native`) |
+| `tsuba-cli` | Diagnostic command line tool |
+| `tsuba-gtk` | GTK 4 / libadwaita desktop app (the only crate with GUI dependencies) |
 
 ## Building
 
@@ -40,7 +40,7 @@ cargo build --workspace
 ## Desktop app
 
 ```sh
-cargo run -p katana-gtk
+cargo run -p tsuba-gtk
 ```
 
 The header bar holds the channel buttons, the current patch name, the connection state and the
@@ -54,24 +54,24 @@ backed up automatically. Unknown models are shown with their identity and stay r
 ## CLI
 
 ```sh
-katana-cli detect
-katana-cli read-temp [--dump]
-katana-cli backup [--out FILE.syx]
-katana-cli restore FILE.syx
-katana-cli write-temp FILE.syx
-katana-cli read-param amp_volume
-katana-cli write-param amp_volume 50
-katana-cli preset-save "My Lead"
-katana-cli preset-apply "My Lead"
-katana-cli preset-list
-katana-cli switch-channel B1 --discard-temp
-katana-cli backup-all --out FILE.alb [--replace]
-katana-cli backup-all --plan
-katana-cli alb-info FILE.alb
-katana-cli tsl-export --out FILE.tsl [--name LIVESET] PRESET...
-katana-cli tsl-export --out FILE.tsl --from-temp
-katana-cli tsl-import FILE.tsl [--index N] [--name NAME] [--replace] [--dry-run]
-katana-cli tsl-import FILE.tsl --index N --to-temp
+tsuba-cli detect
+tsuba-cli read-temp [--dump]
+tsuba-cli backup [--out FILE.syx]
+tsuba-cli restore FILE.syx
+tsuba-cli write-temp FILE.syx
+tsuba-cli read-param amp_volume
+tsuba-cli write-param amp_volume 50
+tsuba-cli preset-save "My Lead"
+tsuba-cli preset-apply "My Lead"
+tsuba-cli preset-list
+tsuba-cli switch-channel B1 --discard-temp
+tsuba-cli backup-all --out FILE.alb [--replace]
+tsuba-cli backup-all --plan
+tsuba-cli alb-info FILE.alb
+tsuba-cli tsl-export --out FILE.tsl [--name LIVESET] PRESET...
+tsuba-cli tsl-export --out FILE.tsl --from-temp
+tsuba-cli tsl-import FILE.tsl [--index N] [--name NAME] [--replace] [--dry-run]
+tsuba-cli tsl-import FILE.tsl --index N --to-temp
 ```
 
 `backup-all` is read only: it sends RQ1 requests for System and the stored patch rows the model

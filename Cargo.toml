@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/katana-protocol",
-    "crates/katana-params",
-    "crates/katana-midi",
-    "crates/katana-store",
-    "crates/katana-engine",
-    "crates/katana-cli",
-    "crates/katana-gtk",
+    "crates/tsuba-protocol",
+    "crates/tsuba-params",
+    "crates/tsuba-midi",
+    "crates/tsuba-store",
+    "crates/tsuba-engine",
+    "crates/tsuba-cli",
+    "crates/tsuba-gtk",
 ]
 
 [workspace.package]
@@ -19,11 +19,11 @@ authors = ["Jan Klíma <140242059+janick-foundry@users.noreply.github.com>"]
 publish = false
 
 [workspace.dependencies]
-katana-protocol = { path = "crates/katana-protocol" }
-katana-params = { path = "crates/katana-params" }
-katana-midi = { path = "crates/katana-midi", default-features = false }
-katana-store = { path = "crates/katana-store" }
-katana-engine = { path = "crates/katana-engine", default-features = false }
+tsuba-protocol = { path = "crates/tsuba-protocol" }
+tsuba-params = { path = "crates/tsuba-params" }
+tsuba-midi = { path = "crates/tsuba-midi", default-features = false }
+tsuba-store = { path = "crates/tsuba-store" }
+tsuba-engine = { path = "crates/tsuba-engine", default-features = false }
 thiserror = "2.0.21"
 anyhow = "1.0.104"
 serde = { version = "1.0.229", features = ["derive"] }

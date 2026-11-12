@@ -1,0 +1,15 @@
+[package]
+name = "tsuba-protocol"
+description = "Roland SysEx protocol model for the BOSS Katana MK II"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true

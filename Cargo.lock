@@ -853,91 +853,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "katana-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "katana-engine",
- "katana-midi",
- "katana-params",
- "katana-protocol",
- "katana-store",
- "sha2",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "katana-engine"
-version = "0.1.0"
-dependencies = [
- "directories",
- "humantime",
- "katana-midi",
- "katana-params",
- "katana-protocol",
- "katana-store",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "katana-gtk"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gettext-rs",
- "glib-build-tools",
- "gtk4",
- "katana-engine",
- "katana-midi",
- "katana-params",
- "katana-protocol",
- "katana-store",
- "libadwaita",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "katana-midi"
-version = "0.1.0"
-dependencies = [
- "alsa",
- "midir",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "katana-params"
-version = "0.1.0"
-dependencies = [
- "katana-protocol",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "katana-protocol"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "katana-store"
-version = "0.1.0"
-dependencies = [
- "katana-protocol",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1651,6 +1566,91 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tsuba-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "sha2",
+ "tracing",
+ "tracing-subscriber",
+ "tsuba-engine",
+ "tsuba-midi",
+ "tsuba-params",
+ "tsuba-protocol",
+ "tsuba-store",
+]
+
+[[package]]
+name = "tsuba-engine"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "humantime",
+ "thiserror 2.0.21",
+ "tracing",
+ "tsuba-midi",
+ "tsuba-params",
+ "tsuba-protocol",
+ "tsuba-store",
+]
+
+[[package]]
+name = "tsuba-gtk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gettext-rs",
+ "glib-build-tools",
+ "gtk4",
+ "libadwaita",
+ "tracing",
+ "tracing-subscriber",
+ "tsuba-engine",
+ "tsuba-midi",
+ "tsuba-params",
+ "tsuba-protocol",
+ "tsuba-store",
+]
+
+[[package]]
+name = "tsuba-midi"
+version = "0.1.0"
+dependencies = [
+ "alsa",
+ "midir",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "tsuba-params"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tsuba-protocol",
+]
+
+[[package]]
+name = "tsuba-protocol"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tsuba-store"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tsuba-protocol",
 ]
 
 [[package]]

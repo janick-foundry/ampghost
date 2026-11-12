@@ -1,0 +1,22 @@
+[package]
+name = "tsuba-midi"
+description = "MIDI transport abstraction for Katana Control"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+default = ["native"]
+native = ["dep:midir", "dep:alsa"]
+
+[dependencies]
+midir = { workspace = true, optional = true }
+alsa = { workspace = true, optional = true }
+thiserror.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true
