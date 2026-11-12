@@ -18,7 +18,7 @@ Source license notes
 The FxFloorBoard source files carry GPL version 2 or later headers and the archive ships the
 GPL version 3 text as license.txt. midi.xml itself carries an "All rights reserved" line without
 an explicit license of its own; it is treated as part of the GPL-licensed program. The derived
-data in this crate is distributed under GPL-3.0-or-later together with the rest of Katana Control.
+data in this crate is distributed under GPL-3.0-or-later together with the rest of Tsuba.
 Residual risk: should the copyright holder consider midi.xml separately licensed, the derived
 table would have to be replaced with independently researched data.
 

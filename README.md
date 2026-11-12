@@ -1,6 +1,6 @@
-# Katana Control
+# Tsuba
 
-Katana Control is a desktop editor for the BOSS Katana MK II guitar amplifier, written in Rust.
+Tsuba is a desktop editor for the BOSS Katana MK II guitar amplifier, written in Rust.
 This repository contains the protocol core, parameter maps, MIDI transport, preset storage, the
 engine, a diagnostic command line tool (Phase 1) and a GTK 4 / libadwaita desktop app (Phase 2).
 
