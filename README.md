@@ -27,6 +27,31 @@ Saving the temporary patch to an amp channel is not implemented.
 | `tsuba-cli` | Diagnostic command line tool |
 | `tsuba-gtk` | GTK 4 / libadwaita desktop app (the only crate with GUI dependencies) |
 
+## Install
+
+Every GitHub release has a Flatpak bundle attached. Download it and install it for your user:
+
+```sh
+flatpak install --user tsuba-<version>-x86_64.flatpak
+```
+
+The GNOME runtime is installed from Flathub when needed. The bundle does not update itself;
+install the bundle of a newer release to update. Inside the sandbox presets and backups live in
+`~/.var/app/io.github.janick_foundry.Tsuba/data/io.github.janick_foundry.Tsuba/`.
+
+To build the Flatpak from source you need `flatpak-builder` (or `org.flatpak.Builder` from
+Flathub) and the GNOME 51 SDK with the Rust stable extension:
+
+```sh
+flatpak-builder --user --force-clean --install-deps-from=flathub --repo=repo flatpak_app \
+    build-aux/flatpak/io.github.janick_foundry.Tsuba.json
+flatpak build-bundle repo tsuba.flatpak io.github.janick_foundry.Tsuba \
+    --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+```
+
+After changing `Cargo.lock`, regenerate the offline crate sources with
+`build-aux/flatpak/update-cargo-sources.sh`. `./check.sh` fails while they are out of date.
+
 ## Building
 
 Requires Rust 1.99 and the ALSA development files on Linux. The desktop app also needs
