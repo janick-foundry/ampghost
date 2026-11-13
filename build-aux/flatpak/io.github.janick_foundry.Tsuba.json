@@ -1,0 +1,56 @@
+{
+  "id": "io.github.janick_foundry.Tsuba",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "51",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.rust-stable"
+  ],
+  "command": "tsuba",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--device=all"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin"
+  },
+  "modules": [
+    {
+      "name": "tsuba",
+      "buildsystem": "simple",
+      "build-options": {
+        "env": {
+          "CARGO_HOME": "/run/build/tsuba/cargo",
+          "CARGO_NET_OFFLINE": "true"
+        }
+      },
+      "build-commands": [
+        "cargo --offline build --release --locked --ignore-rust-version -p tsuba-gtk",
+        "install -Dm755 target/release/tsuba -t /app/bin",
+        "install -Dm644 crates/tsuba-gtk/data/io.github.janick_foundry.Tsuba.desktop -t /app/share/applications",
+        "install -Dm644 crates/tsuba-gtk/data/io.github.janick_foundry.Tsuba.metainfo.xml -t /app/share/metainfo",
+        "install -Dm644 crates/tsuba-gtk/data/icons/hicolor/scalable/apps/io.github.janick_foundry.Tsuba.svg -t /app/share/icons/hicolor/scalable/apps",
+        "install -Dm644 crates/tsuba-gtk/data/icons/hicolor/symbolic/apps/io.github.janick_foundry.Tsuba-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps",
+        "install -Dm644 NOTICE /app/share/licenses/io.github.janick_foundry.Tsuba/NOTICE",
+        "install -Dm644 crates/tsuba-params/NOTICE /app/share/licenses/io.github.janick_foundry.Tsuba/NOTICE-tsuba-params",
+        "install -Dm644 crates/tsuba-gtk/data/icons/LICENSE-lucide crates/tsuba-gtk/data/icons/LICENSE-phosphor -t /app/share/licenses/io.github.janick_foundry.Tsuba"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "../..",
+          "skip": [
+            ".git",
+            "target",
+            ".flatpak-builder",
+            "flatpak_app",
+            "repo"
+          ]
+        },
+        "cargo-sources.json"
+      ]
+    }
+  ]
+}

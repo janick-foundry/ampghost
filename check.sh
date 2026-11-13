@@ -48,4 +48,7 @@ if cargo tree --workspace --exclude tsuba-gtk -e normal --prefix none | rg -q '^
     exit 1
 fi
 
+step "flatpak cargo sources match Cargo.lock"
+python3 build-aux/flatpak/check-cargo-sources.py
+
 printf '\nAll checks passed.\n'

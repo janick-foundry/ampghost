@@ -1,2 +1,5 @@
 /target
 *.swp
+/.flatpak-builder
+/flatpak_app
+/repo
