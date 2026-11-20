@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.ampghost.AmpGhost</id>
+  <id>io.github.janick_foundry.AmpGhost</id>
   <name>AmpGhost</name>
   <summary>Control your BOSS Katana MK II amp</summary>
-  <developer id="io.github.ampghost">
+  <developer id="io.github.janick_foundry">
     <name>Jan Klíma</name>
   </developer>
   <metadata_license>CC0-1.0</metadata_license>
@@ -20,7 +20,7 @@
     <p>AmpGhost only writes to the temporary patch of the amp. It never overwrites stored channels or system settings, and it backs up the temporary patch before every change. The Katana 50 MK II is supported. Other models are detected but stay read only.</p>
     <p>BOSS and KATANA are trademarks of Roland Corporation. AmpGhost is not affiliated with or endorsed by Roland Corporation.</p>
   </description>
-  <launchable type="desktop-id">io.github.ampghost.AmpGhost.desktop</launchable>
+  <launchable type="desktop-id">io.github.janick_foundry.AmpGhost.desktop</launchable>
   <provides>
     <binary>ampghost</binary>
   </provides>

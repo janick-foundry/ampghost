@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-  <gresource prefix="/io/github/ampghost/AmpGhost">
+  <gresource prefix="/io/github/janick_foundry/AmpGhost">
     <file>style.css</file>
-    <file alias="icons/scalable/apps/io.github.ampghost.AmpGhost.svg">icons/hicolor/scalable/apps/io.github.ampghost.AmpGhost.svg</file>
-    <file alias="icons/symbolic/apps/io.github.ampghost.AmpGhost-symbolic.svg">icons/hicolor/symbolic/apps/io.github.ampghost.AmpGhost-symbolic.svg</file>
+    <file alias="icons/scalable/apps/io.github.janick_foundry.AmpGhost.svg">icons/hicolor/scalable/apps/io.github.janick_foundry.AmpGhost.svg</file>
+    <file alias="icons/symbolic/apps/io.github.janick_foundry.AmpGhost-symbolic.svg">icons/hicolor/symbolic/apps/io.github.janick_foundry.AmpGhost-symbolic.svg</file>
     <file alias="icons/scalable/actions/ampghost-amp-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-amp-symbolic.svg</file>
     <file alias="icons/scalable/actions/ampghost-booster-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-booster-symbolic.svg</file>
     <file alias="icons/scalable/actions/ampghost-cab-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-cab-symbolic.svg</file>

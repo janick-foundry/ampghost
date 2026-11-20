@@ -1,5 +1,5 @@
 {
-  "id": "io.github.ampghost.AmpGhost",
+  "id": "io.github.janick_foundry.AmpGhost",
   "runtime": "org.gnome.Platform",
   "runtime-version": "51",
   "sdk": "org.gnome.Sdk",
@@ -29,13 +29,13 @@
       "build-commands": [
         "cargo --offline build --release --locked --ignore-rust-version -p ampghost-gtk",
         "install -Dm755 target/release/ampghost -t /app/bin",
-        "install -Dm644 crates/ampghost-gtk/data/io.github.ampghost.AmpGhost.desktop -t /app/share/applications",
-        "install -Dm644 crates/ampghost-gtk/data/io.github.ampghost.AmpGhost.metainfo.xml -t /app/share/metainfo",
-        "install -Dm644 crates/ampghost-gtk/data/icons/hicolor/scalable/apps/io.github.ampghost.AmpGhost.svg -t /app/share/icons/hicolor/scalable/apps",
-        "install -Dm644 crates/ampghost-gtk/data/icons/hicolor/symbolic/apps/io.github.ampghost.AmpGhost-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps",
-        "install -Dm644 NOTICE /app/share/licenses/io.github.ampghost.AmpGhost/NOTICE",
-        "install -Dm644 crates/ampghost-params/NOTICE /app/share/licenses/io.github.ampghost.AmpGhost/NOTICE-ampghost-params",
-        "install -Dm644 crates/ampghost-gtk/data/icons/LICENSE-lucide crates/ampghost-gtk/data/icons/LICENSE-phosphor -t /app/share/licenses/io.github.ampghost.AmpGhost"
+        "install -Dm644 crates/ampghost-gtk/data/io.github.janick_foundry.AmpGhost.desktop -t /app/share/applications",
+        "install -Dm644 crates/ampghost-gtk/data/io.github.janick_foundry.AmpGhost.metainfo.xml -t /app/share/metainfo",
+        "install -Dm644 crates/ampghost-gtk/data/icons/hicolor/scalable/apps/io.github.janick_foundry.AmpGhost.svg -t /app/share/icons/hicolor/scalable/apps",
+        "install -Dm644 crates/ampghost-gtk/data/icons/hicolor/symbolic/apps/io.github.janick_foundry.AmpGhost-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps",
+        "install -Dm644 NOTICE /app/share/licenses/io.github.janick_foundry.AmpGhost/NOTICE",
+        "install -Dm644 crates/ampghost-params/NOTICE /app/share/licenses/io.github.janick_foundry.AmpGhost/NOTICE-ampghost-params",
+        "install -Dm644 crates/ampghost-gtk/data/icons/LICENSE-lucide crates/ampghost-gtk/data/icons/LICENSE-phosphor -t /app/share/licenses/io.github.janick_foundry.AmpGhost"
       ],
       "sources": [
         {
