@@ -2,10 +2,9 @@ use std::fmt::Write as _;
 
 use ampghost_engine::{ChainOutcome, DetectReport, WriteOutcome};
 use ampghost_protocol::{Dt1, KATANA_50_MK2, PatchImage};
-use sha2::{Digest, Sha256};
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
+    crate::sha256::digest(bytes)
         .iter()
         .fold(String::with_capacity(64), |mut text, byte| {
             let _ = write!(text, "{byte:02x}");

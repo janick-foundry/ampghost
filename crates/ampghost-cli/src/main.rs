@@ -4,6 +4,7 @@ mod cli;
 mod driver;
 mod files;
 mod output;
+mod sha256;
 
 use std::process::ExitCode;
 

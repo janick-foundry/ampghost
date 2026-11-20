@@ -22,7 +22,6 @@ ampghost-protocol.workspace = true
 ampghost-store.workspace = true
 anyhow.workspace = true
 clap.workspace = true
-sha2.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
