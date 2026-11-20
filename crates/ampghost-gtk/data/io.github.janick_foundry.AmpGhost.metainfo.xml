@@ -24,9 +24,9 @@
   <provides>
     <binary>ampghost</binary>
   </provides>
-  <url type="homepage">https://github.com/ampghost/ampghost</url>
-  <url type="bugtracker">https://github.com/ampghost/ampghost/issues</url>
-  <url type="vcs-browser">https://github.com/ampghost/ampghost</url>
+  <url type="homepage">https://github.com/janick-foundry/ampghost</url>
+  <url type="bugtracker">https://github.com/janick-foundry/ampghost/issues</url>
+  <url type="vcs-browser">https://github.com/janick-foundry/ampghost</url>
   <branding>
     <color type="primary" scheme_preference="light">#deddda</color>
     <color type="primary" scheme_preference="dark">#3d3846</color>

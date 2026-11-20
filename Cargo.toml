@@ -17,8 +17,8 @@ rust-version = "1.99"
 license = "GPL-3.0-or-later"
 authors = ["Jan Klíma <140242059+janick-foundry@users.noreply.github.com>"]
 publish = false
-repository = "https://github.com/ampghost/ampghost"
-homepage = "https://github.com/ampghost/ampghost"
+repository = "https://github.com/janick-foundry/ampghost"
+homepage = "https://github.com/janick-foundry/ampghost"
 
 [workspace.dependencies]
 ampghost-protocol = { path = "crates/ampghost-protocol" }
