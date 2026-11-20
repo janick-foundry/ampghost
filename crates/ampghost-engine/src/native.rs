@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -66,8 +67,15 @@ fn civil_from_days(days: u64) -> (u64, u64, u64) {
 }
 
 pub fn default_data_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from_path(PathBuf::from(APP_ID))
-        .map(|dirs| dirs.data_dir().to_path_buf())
+    let home = env::var_os("HOME")
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
+        .or_else(env::home_dir)?;
+    let base = env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| home.join(".local/share"));
+    Some(base.join(APP_ID))
 }
 
 #[derive(Debug, Clone)]
