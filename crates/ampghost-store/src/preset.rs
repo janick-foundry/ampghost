@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::StoreError;
 
-pub const PRESET_FORMAT: &str = "tsuba-preset";
+pub const PRESET_FORMAT: &str = "ampghost-preset";
 pub const PRESET_VERSION: u32 = 1;
 
 const NAME_LIMIT: usize = 64;
