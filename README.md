@@ -16,6 +16,8 @@ AmpGhost is a GTK 4 / libadwaita desktop editor for the BOSS Katana MK II guitar
 written in Rust. It talks to the amp over USB MIDI and lets you shape the sound of the current
 patch from your computer, keep a library of local presets and back up the amp.
 
+![AmpGhost main window with the Amp block of the signal chain open](docs/screenshots/main-window.png)
+
 ## Features
 
 - See the whole signal chain, switch blocks on and off and change the chain order
