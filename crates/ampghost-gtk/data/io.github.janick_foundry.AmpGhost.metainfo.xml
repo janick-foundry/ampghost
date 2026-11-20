@@ -40,9 +40,17 @@
   </recommends>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.1.0" date="2026-11-13">
+    <release version="0.1.0" date="2026-11-20">
       <description>
         <p>First release.</p>
+        <ul>
+          <li>Connects live to a Katana 50 MK II over USB and reconnects when the amp comes back</li>
+          <li>Edits the blocks of the signal chain in the temporary patch</li>
+          <li>Switches between the Panel, A1, A2, B1 and B2 channels</li>
+          <li>Keeps local presets on your computer</li>
+          <li>Imports and exports BOSS TONE STUDIO .tsl livesets</li>
+          <li>Backs up the temporary patch automatically before a whole patch replaces it</li>
+        </ul>
       </description>
     </release>
   </releases>

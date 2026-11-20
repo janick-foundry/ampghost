@@ -58,7 +58,23 @@ jobs:
         run: |
           df -h /
           du -sh .flatpak-builder flatpak_app repo 2>/dev/null || true
+      - id: notes
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          notes="build-aux/release-notes/${GITHUB_REF_NAME}.md"
+          if [[ -f "$notes" ]]; then
+            echo "path=$notes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::$notes not found, the release only gets generated notes"
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
       - if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
           files: ampghost-${{ steps.version.outputs.version }}-x86_64.flatpak
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          make_latest: true
