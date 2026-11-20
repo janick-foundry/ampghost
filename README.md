@@ -1,46 +1,115 @@
+<div align="center">
+
+<img src="crates/ampghost-gtk/data/icons/hicolor/scalable/apps/io.github.janick_foundry.AmpGhost.svg" width="128" height="128" alt="AmpGhost icon">
+
 # AmpGhost
 
-AmpGhost is a desktop editor for the BOSS Katana MK II guitar amplifier, written in Rust.
-This repository contains the protocol core, parameter maps, MIDI transport, preset storage, the
-engine, a diagnostic command line tool (Phase 1) and a GTK 4 / libadwaita desktop app (Phase 2).
+Control your BOSS Katana MK II amp from Linux
 
-Supported hardware: Katana 50 MK II (identified by its Universal Identity Reply).
-Other models are detected and reported, but every write is refused.
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](https://github.com/janick-foundry/ampghost/blob/main/LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/janick-foundry/ampghost)](https://github.com/janick-foundry/ampghost/releases/latest)
+[![Flatpak](https://github.com/janick-foundry/ampghost/actions/workflows/flatpak.yml/badge.svg)](https://github.com/janick-foundry/ampghost/actions/workflows/flatpak.yml)
 
-## Safety model
+</div>
 
-The engine only ever writes to the temporary patch (`60 00 xx xx`) and switches on editor mode
-(`7F 00 00 01`). It never stores to amp channels and never writes system memory. Every write is
-read back and verified. Channel switching uses MIDI Program Change and discards unsaved edits on
-the amp, so the CLI requires `--discard-temp` for it and the desktop app asks for confirmation.
-Saving the temporary patch to an amp channel is not implemented.
+AmpGhost is a GTK 4 / libadwaita desktop editor for the BOSS Katana MK II guitar amplifier,
+written in Rust. It talks to the amp over USB MIDI and lets you shape the sound of the current
+patch from your computer, keep a library of local presets and back up the amp.
 
-## Crates
+## Features
 
-| Crate | Purpose |
+- See the whole signal chain, switch blocks on and off and change the chain order
+- Edit amp, booster, mod, FX, delay, reverb, EQ, send/return, noise gate, solo and contour
+  parameters live; every change is read back from the amp and verified
+- Switch between the Panel, A1, A2, B1 and B2 channels
+- Keep local presets: save the current sound, apply, update and delete presets
+- Import presets from BOSS TONE STUDIO `.tsl` livesets, as local presets or straight to the amp,
+  and export local presets to `.tsl`
+- Back up the whole amp (system settings and stored channels) to a BOSS TONE STUDIO `.alb` file
+- Automatic backup of the temporary patch before a preset, an imported tone or a reloaded channel
+  replaces it
+
+## Supported hardware
+
+| Amp | Status |
 | --- | --- |
-| `ampghost-protocol` | Roland SysEx frames, addresses, identity, device profiles, write plans, verification |
-| `ampghost-params` | Parameter table derived from Katana Mk2 FxFloorBoard (see its NOTICE) |
-| `ampghost-midi` | `MidiTransport` trait, midir backend behind the `native` feature |
-| `ampghost-store` | Preset JSON and `.syx` backup formats, `PresetStorage` trait |
-| `ampghost-engine` | Commands and events, sessions, file storage and engine thread (`native`) |
-| `ampghost-cli` | Diagnostic command line tool |
-| `ampghost-gtk` | GTK 4 / libadwaita desktop app (the only crate with GUI dependencies) |
+| Katana 50 MK II | Supported, tested on the developer's own physical amp |
+| Other Katana MK II models | Not supported yet, untested |
+| Katana MK III | Not supported yet, untested |
 
-## Install
+AmpGhost is developed and tested on a physical Katana 50 MK II connected over USB. Other models
+are detected and shown with their identity, but every write to them is refused.
 
-Every GitHub release has a Flatpak bundle attached. Download it and install it for your user:
+AmpGhost runs on Linux. Release bundles are built for x86_64.
+
+## Installation
+
+Download `ampghost-<version>-x86_64.flatpak` from the
+[latest release](https://github.com/janick-foundry/ampghost/releases/latest) and install it for
+your user:
 
 ```sh
 flatpak install --user ampghost-<version>-x86_64.flatpak
+flatpak run io.github.janick_foundry.AmpGhost
 ```
 
-The GNOME runtime is installed from Flathub when needed. The bundle does not update itself;
-install the bundle of a newer release to update. Inside the sandbox presets and backups live in
-`~/.var/app/io.github.janick_foundry.AmpGhost/data/io.github.janick_foundry.AmpGhost/`.
+The bundle needs the GNOME 51 runtime (`org.gnome.Platform//51`) from Flathub. Flatpak installs
+it together with the bundle when it can reach Flathub; if the Flathub remote is not set up yet,
+add it first:
 
-To build the Flatpak from source you need `flatpak-builder` (or `org.flatpak.Builder` from
-Flathub) and the GNOME 51 SDK with the Rust stable extension:
+```sh
+flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+```
+
+After installation AmpGhost also appears in your application launcher.
+
+## Update
+
+Flatpak bundles do not update themselves. Download the bundle of the newer release and install it
+over the current one:
+
+```sh
+flatpak install --user --reinstall ampghost-<version>-x86_64.flatpak
+```
+
+Your presets and backups are kept.
+
+## Uninstall
+
+```sh
+flatpak uninstall --user io.github.janick_foundry.AmpGhost
+```
+
+Presets and backups stay in `~/.var/app/io.github.janick_foundry.AmpGhost/`. Add `--delete-data`
+to remove them as well, and run `flatpak uninstall --user --unused` to remove the runtime if no
+other app needs it.
+
+## Safety
+
+- AmpGhost only writes to the amp's temporary patch. It never stores to the amp's channels and
+  never writes system settings.
+- Before a preset, an imported tone or a reloaded channel replaces the temporary patch, the current
+  temporary patch is backed up automatically. Single parameter edits are written directly.
+- Every write is read back from the amp and verified.
+- Switching channels discards unsaved edits on the amp, so AmpGhost asks for confirmation when
+  the current sound has unsaved changes.
+- Models other than the Katana 50 MK II stay read only.
+
+<details>
+<summary>Build from source</summary>
+
+Requires Rust 1.99, the ALSA development files and the GTK 4.22 and libadwaita 1.9 development
+files.
+
+```sh
+cargo build --release
+./target/release/ampghost
+```
+
+`./check.sh` runs formatting, clippy, the build, `cargo deny` and the project checks.
+
+To build the Flatpak bundle you need `flatpak-builder` and the GNOME 51 SDK with the Rust stable
+extension from Flathub:
 
 ```sh
 flatpak-builder --user --force-clean --install-deps-from=flathub --repo=repo flatpak_app \
@@ -50,64 +119,21 @@ flatpak build-bundle repo ampghost.flatpak io.github.janick_foundry.AmpGhost \
 ```
 
 After changing `Cargo.lock`, regenerate the offline crate sources with
-`build-aux/flatpak/update-cargo-sources.sh`. `./check.sh` fails while they are out of date.
+`build-aux/flatpak/update-cargo-sources.sh`.
 
-## Building
+The repository also contains `ampghost-cli`, a diagnostic command line tool
+(`cargo run -p ampghost-cli -- --help`).
 
-Requires Rust 1.99 and the ALSA development files on Linux. The desktop app also needs
-GTK 4.22 and libadwaita 1.9 development files.
-
-```sh
-cargo build --workspace
-./check.sh
-```
-
-## Desktop app
-
-```sh
-cargo run -p ampghost-gtk
-```
-
-The header bar holds the channel buttons, the current patch name, the connection state and the
-progress of the running operation. The sidebar lists local presets (click to apply to the
-temporary patch), the centre shows the signal chain with on/off switches and variant colours, and
-the lower panel edits the parameters of the selected block. Every edit is written to the
-temporary patch and verified; slider edits are debounced. The main menu offers temp backup and
-restore. Before a preset is applied or a backup is restored, the current temporary patch is
-backed up automatically. Unknown models are shown with their identity and stay read only.
-
-## CLI
-
-```sh
-ampghost-cli detect
-ampghost-cli read-temp [--dump]
-ampghost-cli backup [--out FILE.syx]
-ampghost-cli restore FILE.syx
-ampghost-cli write-temp FILE.syx
-ampghost-cli read-param amp_volume
-ampghost-cli write-param amp_volume 50
-ampghost-cli preset-save "My Lead"
-ampghost-cli preset-apply "My Lead"
-ampghost-cli preset-list
-ampghost-cli switch-channel B1 --discard-temp
-ampghost-cli backup-all --out FILE.alb [--replace]
-ampghost-cli backup-all --plan
-ampghost-cli alb-info FILE.alb
-ampghost-cli tsl-export --out FILE.tsl [--name LIVESET] PRESET...
-ampghost-cli tsl-export --out FILE.tsl --from-temp
-ampghost-cli tsl-import FILE.tsl [--index N] [--name NAME] [--replace] [--dry-run]
-ampghost-cli tsl-import FILE.tsl --index N --to-temp
-```
-
-`backup-all` is read only: it sends RQ1 requests for System and the stored patch rows the model
-has, one at a time, and saves a BOSS TONE STUDIO `.alb` file. There is no full restore.
-`backup-all --plan`, `alb-info`, `tsl-export PRESET...` and `tsl-import` into presets run
-without the amp. `tsl-import` checks the device, block lengths and official ranges, ignores the
-Status block and fills blocks missing from older files with the factory defaults.
-
-Presets and default backups live in the user data directory for the app id
-`io.github.janick_foundry.AmpGhost`.
+</details>
 
 ## License
 
-GPL-3.0-or-later. See `LICENSE` and `NOTICE`.
+AmpGhost is licensed under the GNU General Public License, version 3 or later
+(GPL-3.0-or-later). See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+The parameter maps are derived from Katana Mk2 FxFloorBoard by Colin Willcocks (gumtown), which is
+distributed under the GNU General Public License. Full attribution is in
+[crates/ampghost-params/NOTICE](crates/ampghost-params/NOTICE).
+
+BOSS and KATANA are trademarks of Roland Corporation. AmpGhost is not affiliated with or endorsed
+by Roland Corporation.
