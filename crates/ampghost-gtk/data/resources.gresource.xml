@@ -4,21 +4,21 @@
     <file>style.css</file>
     <file alias="icons/scalable/apps/io.github.ampghost.AmpGhost.svg">icons/hicolor/scalable/apps/io.github.ampghost.AmpGhost.svg</file>
     <file alias="icons/symbolic/apps/io.github.ampghost.AmpGhost-symbolic.svg">icons/hicolor/symbolic/apps/io.github.ampghost.AmpGhost-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-amp-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-amp-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-booster-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-booster-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-cab-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-cab-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-contour-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-contour-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-delay-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-delay-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-delay2-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-delay2-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-eq-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-eq-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-fx-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-fx-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-gate-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-gate-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-mod-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-mod-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-patch-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-patch-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-pedal-fx-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-pedal-fx-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-reverb-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-reverb-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-send-return-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-send-return-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-solo-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-solo-symbolic.svg</file>
-    <file alias="icons/scalable/actions/tsuba-upload-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-upload-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-amp-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-amp-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-booster-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-booster-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-cab-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-cab-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-contour-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-contour-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-delay-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-delay-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-delay2-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-delay2-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-eq-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-eq-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-fx-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-fx-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-gate-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-gate-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-mod-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-mod-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-patch-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-patch-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-pedal-fx-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-pedal-fx-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-reverb-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-reverb-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-send-return-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-send-return-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-solo-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-solo-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-upload-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-upload-symbolic.svg</file>
   </gresource>
 </gresources>

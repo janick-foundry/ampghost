@@ -14,7 +14,7 @@ use crate::cli::Action;
 use crate::output::sha256_hex;
 
 const PROFILE: &DeviceProfile = &KATANA_50_MK2;
-const DEFAULT_LIVESET_NAME: &str = "Tsuba";
+const DEFAULT_LIVESET_NAME: &str = "AmpGhost";
 
 pub fn offline(action: &Action, presets: &FileStorage) -> Option<Result<()>> {
     match action {

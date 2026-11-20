@@ -1,6 +1,6 @@
 use gettextrs::{bindtextdomain, gettext, textdomain};
 
-const DOMAIN: &str = "tsuba";
+const DOMAIN: &str = "ampghost";
 const LOCALE_DIR: &str = "/usr/share/locale";
 
 pub fn init() {

@@ -1,6 +1,6 @@
 [package]
 name = "ampghost-midi"
-description = "MIDI transport abstraction for Tsuba"
+description = "MIDI transport abstraction for AmpGhost"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -15,7 +15,7 @@ use gtk::{gio, glib};
 fn main() -> glib::ExitCode {
     init_tracing();
     i18n::init();
-    if let Err(error) = gio::resources_register_include!("tsuba.gresource") {
+    if let Err(error) = gio::resources_register_include!("ampghost.gresource") {
         tracing::error!(%error, "registering resources failed");
         return glib::ExitCode::FAILURE;
     }

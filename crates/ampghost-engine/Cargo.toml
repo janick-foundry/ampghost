@@ -1,6 +1,6 @@
 [package]
 name = "ampghost-engine"
-description = "Session logic for Tsuba: detection, temp reads, verified temp writes, backups and presets"
+description = "Session logic for AmpGhost: detection, temp reads, verified temp writes, backups and presets"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

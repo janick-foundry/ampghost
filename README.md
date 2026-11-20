@@ -1,6 +1,6 @@
-# Tsuba
+# AmpGhost
 
-Tsuba is a desktop editor for the BOSS Katana MK II guitar amplifier, written in Rust.
+AmpGhost is a desktop editor for the BOSS Katana MK II guitar amplifier, written in Rust.
 This repository contains the protocol core, parameter maps, MIDI transport, preset storage, the
 engine, a diagnostic command line tool (Phase 1) and a GTK 4 / libadwaita desktop app (Phase 2).
 
@@ -32,7 +32,7 @@ Saving the temporary patch to an amp channel is not implemented.
 Every GitHub release has a Flatpak bundle attached. Download it and install it for your user:
 
 ```sh
-flatpak install --user tsuba-<version>-x86_64.flatpak
+flatpak install --user ampghost-<version>-x86_64.flatpak
 ```
 
 The GNOME runtime is installed from Flathub when needed. The bundle does not update itself;
@@ -45,7 +45,7 @@ Flathub) and the GNOME 51 SDK with the Rust stable extension:
 ```sh
 flatpak-builder --user --force-clean --install-deps-from=flathub --repo=repo flatpak_app \
     build-aux/flatpak/io.github.ampghost.AmpGhost.json
-flatpak build-bundle repo tsuba.flatpak io.github.ampghost.AmpGhost \
+flatpak build-bundle repo ampghost.flatpak io.github.ampghost.AmpGhost \
     --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
 ```
 

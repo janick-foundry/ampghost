@@ -296,7 +296,7 @@ fn main_menu() -> gio::Menu {
     menu.append_section(None, &files);
     let about = gio::Menu::new();
     about.append(Some(&tr("Keyboard Shortcuts")), Some("win.shortcuts"));
-    about.append(Some(&tr("About Tsuba")), Some("win.about"));
+    about.append(Some(&tr("About AmpGhost")), Some("win.about"));
     menu.append_section(None, &about);
     menu
 }
@@ -563,7 +563,7 @@ impl Ui {
         toasts.set_child(Some(&split));
         let window = adw::ApplicationWindow::builder()
             .application(app)
-            .title(tr("Tsuba"))
+            .title(tr("AmpGhost"))
             .default_width(1920)
             .default_height(1080)
             .width_request(WINDOW_MIN_WIDTH)
@@ -1926,7 +1926,7 @@ impl Ui {
                 page.set_icon_name(Some("dialog-warning-symbolic"));
                 page.set_title(&tr("This Model Is Not Supported Yet"));
                 page.set_description(Some(&trf(
-                    "Tsuba currently supports only the MK II series.\nDetected identity: {identity}\nAll writes are disabled.",
+                    "AmpGhost currently supports only the MK II series.\nDetected identity: {identity}\nAll writes are disabled.",
                     &[("identity", &device.identity.hex())],
                 )));
             }
@@ -1965,7 +1965,7 @@ impl Ui {
         let title = match patch {
             Some(name) if dirty => trf("{name} • Edited", &[("name", &name)]),
             Some(name) => name,
-            None => tr("Tsuba"),
+            None => tr("AmpGhost"),
         };
         self.title.set_title(&title);
         let profile = model.device.as_ref().and_then(|device| device.profile);
@@ -2117,7 +2117,7 @@ impl Ui {
             row.add_css_class("preset-row");
             row.add_suffix(
                 &gtk::Image::builder()
-                    .icon_name("tsuba-upload-symbolic")
+                    .icon_name("ampghost-upload-symbolic")
                     .valign(gtk::Align::Center)
                     .css_classes(["preset-apply"])
                     .accessible_role(gtk::AccessibleRole::Presentation)
@@ -2544,7 +2544,7 @@ fn build_sidebar_header() -> (adw::HeaderBar, gtk::ToggleButton) {
     header.pack_start(&toggle);
     header.pack_start(
         &gtk::Label::builder()
-            .label(tr("Tsuba"))
+            .label(tr("AmpGhost"))
             .css_classes(["heading"])
             .build(),
     );
@@ -2553,7 +2553,7 @@ fn build_sidebar_header() -> (adw::HeaderBar, gtk::ToggleButton) {
 }
 
 fn build_header() -> Header {
-    let title = adw::WindowTitle::new(&tr("Tsuba"), "");
+    let title = adw::WindowTitle::new(&tr("AmpGhost"), "");
     let header = adw::HeaderBar::new();
     header.set_title_widget(Some(&title));
     let sidebar_button = sidebar_toggle();

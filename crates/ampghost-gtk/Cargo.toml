@@ -11,7 +11,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [[bin]]
-name = "tsuba"
+name = "ampghost"
 path = "src/main.rs"
 
 [dependencies]

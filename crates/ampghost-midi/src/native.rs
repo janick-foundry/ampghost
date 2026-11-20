@@ -12,8 +12,8 @@ use crate::assemble::SysexAssembler;
 use crate::error::MidiError;
 use crate::transport::{MidiBackend, MidiTransport, PortInfo};
 
-const CLIENT_NAME: &str = "tsuba";
-const WATCH_CLIENT_NAME: &str = "tsuba-watch";
+const CLIENT_NAME: &str = "ampghost";
+const WATCH_CLIENT_NAME: &str = "ampghost-watch";
 const RECEIVE_SLICE: Duration = Duration::from_millis(50);
 
 type Registry = Arc<Mutex<Vec<(String, Weak<AtomicBool>)>>>;
@@ -167,7 +167,7 @@ impl MidiBackend for MidirBackend {
         let seq = announce_seq()?;
         let open = Arc::clone(&self.open);
         thread::Builder::new()
-            .name("tsuba-port-watch".to_owned())
+            .name("ampghost-port-watch".to_owned())
             .spawn(move || watch_loop(&seq, &open, &*notify))
             .map_err(|error| MidiError::Init(error.to_string()))?;
         tracing::info!("watching MIDI port announcements");

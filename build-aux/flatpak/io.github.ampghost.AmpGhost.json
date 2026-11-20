@@ -6,7 +6,7 @@
   "sdk-extensions": [
     "org.freedesktop.Sdk.Extension.rust-stable"
   ],
-  "command": "tsuba",
+  "command": "ampghost",
   "finish-args": [
     "--share=ipc",
     "--socket=wayland",
@@ -18,17 +18,17 @@
   },
   "modules": [
     {
-      "name": "tsuba",
+      "name": "ampghost",
       "buildsystem": "simple",
       "build-options": {
         "env": {
-          "CARGO_HOME": "/run/build/tsuba/cargo",
+          "CARGO_HOME": "/run/build/ampghost/cargo",
           "CARGO_NET_OFFLINE": "true"
         }
       },
       "build-commands": [
         "cargo --offline build --release --locked --ignore-rust-version -p ampghost-gtk",
-        "install -Dm755 target/release/tsuba -t /app/bin",
+        "install -Dm755 target/release/ampghost -t /app/bin",
         "install -Dm644 crates/ampghost-gtk/data/io.github.ampghost.AmpGhost.desktop -t /app/share/applications",
         "install -Dm644 crates/ampghost-gtk/data/io.github.ampghost.AmpGhost.metainfo.xml -t /app/share/metainfo",
         "install -Dm644 crates/ampghost-gtk/data/icons/hicolor/scalable/apps/io.github.ampghost.AmpGhost.svg -t /app/share/icons/hicolor/scalable/apps",

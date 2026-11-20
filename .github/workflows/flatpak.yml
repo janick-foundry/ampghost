@@ -34,10 +34,10 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: build-aux/flatpak/io.github.ampghost.AmpGhost.json
-          bundle: tsuba-${{ steps.version.outputs.version }}-x86_64.flatpak
-          artifact-name: tsuba-${{ steps.version.outputs.version }}-x86_64.flatpak
+          bundle: ampghost-${{ steps.version.outputs.version }}-x86_64.flatpak
+          artifact-name: ampghost-${{ steps.version.outputs.version }}-x86_64.flatpak
           cache-key: flatpak-builder-${{ hashFiles('build-aux/flatpak/**', 'Cargo.lock') }}
       - if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
-          files: tsuba-${{ steps.version.outputs.version }}-x86_64.flatpak
+          files: ampghost-${{ steps.version.outputs.version }}-x86_64.flatpak

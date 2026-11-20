@@ -1,6 +1,6 @@
 [package]
 name = "ampghost-store"
-description = "Preset and backup formats for Tsuba"
+description = "Preset and backup formats for AmpGhost"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

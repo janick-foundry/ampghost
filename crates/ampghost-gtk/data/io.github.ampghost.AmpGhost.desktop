@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Tsuba
+Name=AmpGhost
 Comment=Edit the sound of a BOSS Katana MK II amplifier
-Exec=tsuba
+Exec=ampghost
 Icon=io.github.ampghost.AmpGhost
 Terminal=false
 Categories=AudioVideo;Audio;Music;GTK;GNOME;
