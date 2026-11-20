@@ -57,8 +57,7 @@ pub fn print_dump(packets: &[Dt1]) {
             let offset = packet
                 .address()
                 .offset(u32::try_from(row * 16).unwrap_or_default())
-                .map(|address| address.to_string())
-                .unwrap_or_default();
+                .map_or_else(|_| String::new(), |address| address.to_string());
             println!("{offset}  {}", hex(chunk));
         }
     }

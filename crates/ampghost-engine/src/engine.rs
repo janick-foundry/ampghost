@@ -117,8 +117,7 @@ impl Engine {
                     let packets = self
                         .session
                         .as_mut()
-                        .map(Session::take_unsolicited)
-                        .unwrap_or_default();
+                        .map_or_else(Vec::new, Session::take_unsolicited);
                     for packet in packets {
                         sink(Event::Unsolicited(packet));
                     }
@@ -154,8 +153,7 @@ impl Engine {
         let packets = self
             .session
             .as_mut()
-            .map(Session::take_unsolicited)
-            .unwrap_or_default();
+            .map_or_else(Vec::new, Session::take_unsolicited);
         let deferred = if follow {
             packets
         } else {

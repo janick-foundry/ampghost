@@ -64,10 +64,10 @@ pub fn load_tones(path: &Path) -> Result<ToneFile> {
         .enumerate()
         .map(|(position, patch)| {
             let loaded = load_tone(&patch.blocks);
-            let name = loaded
-                .as_ref()
-                .map(|(image, _)| image.name().trim().to_owned())
-                .unwrap_or_default();
+            let name = loaded.as_ref().map_or_else(
+                |_| String::new(),
+                |(image, _)| image.name().trim().to_owned(),
+            );
             let number = (position + 1).to_string();
             let label = if name.is_empty() {
                 trf("{number}. (unnamed)", &[("number", &number)])

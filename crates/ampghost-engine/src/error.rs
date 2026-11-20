@@ -57,8 +57,7 @@ impl EngineError {
 }
 
 fn last_reason(last: Option<&str>) -> String {
-    last.map(|reason| format!(" (last error: {reason})"))
-        .unwrap_or_default()
+    last.map_or_else(String::new, |reason| format!(" (last error: {reason})"))
 }
 
 fn describe(mismatches: &[ByteMismatch]) -> String {

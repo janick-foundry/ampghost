@@ -1847,8 +1847,7 @@ impl Ui {
             .borrow()
             .image
             .as_ref()
-            .map(PatchImage::name)
-            .unwrap_or_default();
+            .map_or_else(String::new, PatchImage::name);
         let ui = Rc::clone(self);
         dialogs::ask_preset_name(&self.window, &suggestion, move |name| {
             let exists = ui
