@@ -33,12 +33,11 @@ patch from your computer, keep a library of local presets and back up the amp.
 
 | Amp | Status |
 | --- | --- |
-| Katana 50 MK II | Supported, tested on the developer's own physical amp |
-| Other Katana MK II models | Not supported yet, untested |
-| Katana MK III | Not supported yet, untested |
+| Katana 50 MK II | Fully tested and daily driven on my own unit |
+| Katana 50 MK III | Currently under analysis, support coming in the future |
 
-AmpGhost is developed and tested on a physical Katana 50 MK II connected over USB. Other models
-are detected and shown with their identity, but every write to them is refused.
+I develop and test AmpGhost on my own Katana 50 MK II, connected over USB, and use it with that
+amp every day.
 
 AmpGhost runs on Linux. Release bundles are built for x86_64.
 
@@ -93,7 +92,6 @@ other app needs it.
 - Every write is read back from the amp and verified.
 - Switching channels discards unsaved edits on the amp, so AmpGhost asks for confirmation when
   the current sound has unsaved changes.
-- Models other than the Katana 50 MK II stay read only.
 
 <details>
 <summary>Build from source</summary>
