@@ -951,19 +951,6 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/humantime/humantime-2.4.0.crate",
-        "sha256": "15cdd26707701c53297e2fa6afb323d55fbc1d0810c3aec078ae3ef0424c3c15",
-        "dest": "cargo/vendor/humantime-2.4.0"
-    },
-    {
-        "type": "inline",
-        "contents": "{\"package\": \"15cdd26707701c53297e2fa6afb323d55fbc1d0810c3aec078ae3ef0424c3c15\", \"files\": {}}",
-        "dest": "cargo/vendor/humantime-2.4.0",
-        "dest-filename": ".cargo-checksum.json"
-    },
-    {
-        "type": "archive",
-        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/hybrid-array/hybrid-array-0.4.15.crate",
         "sha256": "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17",
         "dest": "cargo/vendor/hybrid-array-0.4.15"

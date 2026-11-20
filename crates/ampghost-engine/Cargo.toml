@@ -12,7 +12,7 @@ homepage.workspace = true
 
 [features]
 default = ["native"]
-native = ["ampghost-midi/native", "dep:directories", "dep:humantime"]
+native = ["ampghost-midi/native", "dep:directories"]
 
 [dependencies]
 ampghost-protocol.workspace = true
@@ -22,7 +22,6 @@ ampghost-store.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 directories = { workspace = true, optional = true }
-humantime = { workspace = true, optional = true }
 
 [lints]
 workspace = true
