@@ -2,9 +2,8 @@ name: Flatpak
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   cargo-sources:
@@ -19,9 +18,25 @@ jobs:
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
       options: --privileged
+      volumes:
+        - /usr/share/dotnet:/host/usr/share/dotnet
+        - /usr/share/swift:/host/usr/share/swift
+        - /usr/local/lib/android:/host/usr/local/lib/android
+        - /usr/local/share/boost:/host/usr/local/share/boost
+        - /usr/local/.ghcup:/host/usr/local/.ghcup
+        - /opt/ghc:/host/opt/ghc
+        - /opt/hostedtoolcache:/host/opt/hostedtoolcache
     permissions:
       contents: write
     steps:
+      - name: Free disk space on the runner
+        shell: bash
+        run: |
+          df -h /
+          for dir in /host/usr/share/dotnet /host/usr/share/swift /host/usr/local/lib/android /host/usr/local/share/boost /host/usr/local/.ghcup /host/opt/ghc /host/opt/hostedtoolcache; do
+            find "$dir" -mindepth 1 -delete || true
+          done
+          df -h /
       - uses: actions/checkout@v7
       - id: version
         shell: bash
@@ -37,6 +52,12 @@ jobs:
           bundle: ampghost-${{ steps.version.outputs.version }}-x86_64.flatpak
           artifact-name: ampghost-${{ steps.version.outputs.version }}-x86_64.flatpak
           cache-key: flatpak-builder-${{ hashFiles('build-aux/flatpak/**', 'Cargo.lock') }}
+      - name: Show disk usage
+        if: always()
+        shell: bash
+        run: |
+          df -h /
+          du -sh .flatpak-builder flatpak_app repo 2>/dev/null || true
       - if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
