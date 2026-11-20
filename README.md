@@ -52,6 +52,10 @@ flatpak install --user ampghost-<version>-x86_64.flatpak
 flatpak run io.github.janick_foundry.AmpGhost
 ```
 
+> [!NOTE]
+> Connect the Katana 50 MK II over USB and turn it on, before or after you start AmpGhost.
+> The app finds the amp on its own and reconnects if you unplug it, without losing your unsaved edits.
+
 The bundle needs the GNOME 51 runtime (`org.gnome.Platform//51`) from Flathub. Flatpak installs
 it together with the bundle when it can reach Flathub; if the Flathub remote is not set up yet,
 add it first:
@@ -82,6 +86,39 @@ flatpak uninstall --user io.github.janick_foundry.AmpGhost
 Presets and backups stay in `~/.var/app/io.github.janick_foundry.AmpGhost/`. Add `--delete-data`
 to remove them as well, and run `flatpak uninstall --user --unused` to remove the runtime if no
 other app needs it.
+
+## Tone files (.tsl)
+
+BOSS Tone Studio stores livesets in `.tsl` files. A liveset holds one or more patches, and
+AmpGhost can import and export livesets for the Katana 50 MK II.
+
+### Where to find them
+
+- [BOSS Tone Exchange](https://bosstoneexchange.com/gear/katana_mk2/): livesets shared by Katana
+  MK II players. Downloading needs a free Roland account.
+- [GuitarPatches](https://www.guitarpatches.com/patches.php?unit=KATANAMKII): a community library
+  of Katana MK II patches. Some downloads are zipped, so unpack the `.tsl` file first.
+
+### Import
+
+Choose **Import Presets (.tsl)…** in the main menu and open a file. If the liveset holds several
+patches, pick one from the list. AmpGhost shows what it found, for example blocks that are missing
+in older files and get filled with factory defaults, and then offers:
+
+- **Save as Local Preset**: keeps the patch on your computer under a name you choose. This works
+  without the amp connected.
+- **Send to Temp**: backs up the amp's temporary patch and then loads the imported patch into it.
+  Your amp channels are not changed.
+
+Patches are imported one at a time. AmpGhost only accepts livesets made for the Katana MK II; a
+file for the Katana 50 MK III, or a patch with values outside the official ranges, is refused with
+an error.
+
+### Export
+
+Choose **Export Presets (.tsl)…** in the main menu, tick up to 15 local presets, name the liveset
+and choose where to save it. You can open the file in BOSS Tone Studio or import it into AmpGhost
+again. Export works without the amp connected.
 
 ## Safety
 
