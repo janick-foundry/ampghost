@@ -1922,7 +1922,7 @@ impl Ui {
         self.retry_button.set_visible(false);
         match (&model.device, &model.image) {
             (Some(device), _) if !device.is_supported() => {
-                page.set_icon_name(Some("dialog-warning-symbolic"));
+                page.set_icon_name(Some("ampghost-warning-symbolic"));
                 page.set_title(&tr("This Model Is Not Supported Yet"));
                 page.set_description(Some(&trf(
                     "AmpGhost currently supports only the MK II series.\nDetected identity: {identity}\nAll writes are disabled.",
@@ -1944,7 +1944,7 @@ impl Ui {
                 page.set_description(None);
             }
             (None, _) => {
-                page.set_icon_name(Some("audio-speakers-symbolic"));
+                page.set_icon_name(Some("ampghost-speakers-symbolic"));
                 page.set_title(&tr("Katana Not Connected"));
                 page.set_description(Some(&tr("Connect the amp via USB and turn it on.")));
                 self.retry_button.set_visible(true);

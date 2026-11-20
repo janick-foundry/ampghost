@@ -15,7 +15,9 @@ Full attribution, source location and checksums are in crates/ampghost-params/NO
 Interface icons in crates/ampghost-gtk/data/icons/hicolor/symbolic/actions are converted from Lucide
 (ISC licence, with icons derived from Feather under the MIT licence) and Phosphor Icons core
 (MIT licence); see crates/ampghost-gtk/data/icons/LICENSE-lucide and LICENSE-phosphor. The Pedal FX
-icon is original to this project and drawn in the Lucide style.
+icon is original to this project and drawn in the Lucide style. The speakers and warning status
+icons are from the Adwaita icon theme by the GNOME Project (CC-BY-SA 3.0 or GNU LGPL v3); see
+LICENSE-adwaita.
 
 BOSS and KATANA are trademarks of Roland Corporation. This project is not affiliated with or
 endorsed by Roland Corporation.

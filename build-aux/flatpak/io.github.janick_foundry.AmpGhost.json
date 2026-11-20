@@ -35,7 +35,7 @@
         "install -Dm644 crates/ampghost-gtk/data/icons/hicolor/symbolic/apps/io.github.janick_foundry.AmpGhost-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps",
         "install -Dm644 NOTICE /app/share/licenses/io.github.janick_foundry.AmpGhost/NOTICE",
         "install -Dm644 crates/ampghost-params/NOTICE /app/share/licenses/io.github.janick_foundry.AmpGhost/NOTICE-ampghost-params",
-        "install -Dm644 crates/ampghost-gtk/data/icons/LICENSE-lucide crates/ampghost-gtk/data/icons/LICENSE-phosphor -t /app/share/licenses/io.github.janick_foundry.AmpGhost"
+        "install -Dm644 crates/ampghost-gtk/data/icons/LICENSE-lucide crates/ampghost-gtk/data/icons/LICENSE-phosphor crates/ampghost-gtk/data/icons/LICENSE-adwaita -t /app/share/licenses/io.github.janick_foundry.AmpGhost"
       ],
       "sources": [
         {

@@ -19,6 +19,8 @@
     <file alias="icons/scalable/actions/ampghost-reverb-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-reverb-symbolic.svg</file>
     <file alias="icons/scalable/actions/ampghost-send-return-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-send-return-symbolic.svg</file>
     <file alias="icons/scalable/actions/ampghost-solo-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-solo-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-speakers-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-speakers-symbolic.svg</file>
     <file alias="icons/scalable/actions/ampghost-upload-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-upload-symbolic.svg</file>
+    <file alias="icons/scalable/actions/ampghost-warning-symbolic.svg">icons/hicolor/symbolic/actions/ampghost-warning-symbolic.svg</file>
   </gresource>
 </gresources>

@@ -10,6 +10,7 @@ use crate::files::ToneFile;
 use crate::i18n::{tr, trf};
 
 const LUCIDE_LICENSE: &str = include_str!("../data/icons/LICENSE-lucide");
+const ADWAITA_LICENSE: &str = include_str!("../data/icons/LICENSE-adwaita");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwitchChoice {
@@ -455,6 +456,7 @@ pub fn about(parent: &impl IsA<gtk::Widget>) {
         &[
             "Lucide https://lucide.dev",
             "Phosphor Icons https://phosphoricons.com",
+            "GNOME Project https://www.gnome.org",
         ],
     );
     dialog.add_legal_section(
@@ -474,6 +476,12 @@ pub fn about(parent: &impl IsA<gtk::Widget>) {
         Some("© 2023 Phosphor Icons"),
         gtk::License::MitX11,
         None,
+    );
+    dialog.add_legal_section(
+        "Adwaita",
+        Some("© GNOME Project"),
+        gtk::License::Custom,
+        Some(ADWAITA_LICENSE),
     );
     dialog.present(Some(parent));
 }
