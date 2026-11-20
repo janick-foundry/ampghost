@@ -1,36 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-<defs>
-<linearGradient id="base" x1="8" x2="120" y1="0" y2="0" gradientUnits="userSpaceOnUse">
-<stop offset="0" stop-color="#3d3846"/>
-<stop offset="0.04" stop-color="#5e5c64"/>
-<stop offset="0.08" stop-color="#3d3846"/>
-<stop offset="0.92" stop-color="#3d3846"/>
-<stop offset="0.96" stop-color="#5e5c64"/>
-<stop offset="1" stop-color="#3d3846"/>
-</linearGradient>
-<linearGradient id="face" x1="0" x2="0" y1="32" y2="108" gradientUnits="userSpaceOnUse">
-<stop offset="0" stop-color="#77767b"/>
-<stop offset="1" stop-color="#5e5c64"/>
-</linearGradient>
-<linearGradient id="panel" x1="0" x2="0" y1="38" y2="56" gradientUnits="userSpaceOnUse">
-<stop offset="0" stop-color="#f6f5f4"/>
-<stop offset="1" stop-color="#c0bfbc"/>
-</linearGradient>
-<radialGradient id="led" cx="96" cy="46" r="5" gradientUnits="userSpaceOnUse">
-<stop offset="0" stop-color="#ff7b63"/>
-<stop offset="0.6" stop-color="#e01b24"/>
-<stop offset="1" stop-color="#a51d2d"/>
-</radialGradient>
-</defs>
-<path d="M48 33v-7a5 5 0 0 1 5-5h22a5 5 0 0 1 5 5v7h-6v-6H54v6z" fill="#3d3846"/>
-<rect x="8" y="32" width="112" height="84" rx="10" fill="url(#base)"/>
-<rect x="8" y="32" width="112" height="76" rx="10" fill="url(#face)"/>
-<path d="M18 32h92a10 10 0 0 1 10 10v1a10 10 0 0 0-10-10H18a10 10 0 0 0-10 10v-1a10 10 0 0 1 10-10z" fill="#c0bfbc" opacity="0.8"/>
-<rect x="16" y="38" width="96" height="18" rx="4" fill="url(#panel)"/>
-<g fill="#3d3846"><circle cx="30" cy="47" r="5"/><circle cx="46" cy="47" r="5"/><circle cx="62" cy="47" r="5"/></g>
-<g fill="#deddda"><rect x="29" y="42.5" width="2" height="4" rx="1"/><rect x="45" y="42.5" width="2" height="4" rx="1"/><rect x="61" y="42.5" width="2" height="4" rx="1"/></g>
-<circle cx="96" cy="47" r="4" fill="url(#led)"/>
-<rect x="16" y="62" width="96" height="40" rx="4" fill="#241f31"/>
-<g fill="#3d3846"><rect x="22" y="68" width="84" height="4" rx="2"/><rect x="22" y="77" width="84" height="4" rx="2"/><rect x="22" y="86" width="84" height="4" rx="2"/></g>
-<rect x="54" y="95" width="20" height="3" rx="1.5" fill="#c0bfbc"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <g transform="translate(8.000000,8.421053) scale(0.14035088) translate(-125,-108)">
+  <path fill-rule="evenodd" fill="#383838" d="M352.00,228.00 V177.00 A70.00,70.00 0 0 1 422.00,107.00 H625.00 A70.00,70.00 0 0 1 695.00,177.00 V228.00 H352.00 Z M398.00,228.00 V192.00 A32.00,32.00 0 0 1 430.00,160.00 H617.00 A32.00,32.00 0 0 1 649.00,192.00 V228.00 H398.00 Z"/>
+  <rect x="125" y="228" width="798" height="672" rx="68" ry="68" fill="#383838"/>
+  <path fill="#383838" d="M337.00,230.00 V215.00 A9.00,9.00 0 0 1 346.00,206.00 H399.00 A9.00,9.00 0 0 1 408.00,215.00 V230.00 Z"/>
+  <path fill="#383838" d="M640.00,230.00 V215.00 A9.00,9.00 0 0 1 649.00,206.00 H702.00 A9.00,9.00 0 0 1 711.00,215.00 V230.00 Z"/>
+  <path fill="#28282a" d="M219.00,276.00 H829.00 A46.00,46.00 0 0 1 875.00,322.00 V806.00 A46.00,46.00 0 0 1 829.00,852.00 H219.00 A46.00,46.00 0 0 1 173.00,806.00 V322.00 A46.00,46.00 0 0 1 219.00,276.00 Z"/>
+  <rect x="182" y="286" width="684" height="161" rx="36" ry="36" fill="#e5ad58"/>
+  <clipPath id="grille">
+    <path d="M218.00,455.00 H830.00 A36.00,36.00 0 0 1 866.00,491.00 V808.00 A36.00,36.00 0 0 1 830.00,844.00 H218.00 A36.00,36.00 0 0 1 182.00,808.00 V491.00 A36.00,36.00 0 0 1 218.00,455.00 Z"/>
+  </clipPath>
+  <g clip-path="url(#grille)">
+    <path fill="#333335" d="M218.00,455.00 H830.00 A36.00,36.00 0 0 1 866.00,491.00 V808.00 A36.00,36.00 0 0 1 830.00,844.00 H218.00 A36.00,36.00 0 0 1 182.00,808.00 V491.00 A36.00,36.00 0 0 1 218.00,455.00 Z"/>
+    <rect x="170" y="468" width="710" height="21" fill="#505052"/>
+    <rect x="170" y="511" width="710" height="21" fill="#505052"/>
+    <rect x="170" y="554" width="710" height="21" fill="#505052"/>
+    <rect x="170" y="598" width="710" height="22" fill="#505052"/>
+    <rect x="170" y="641" width="710" height="22" fill="#505052"/>
+    <rect x="170" y="684" width="710" height="21" fill="#505052"/>
+    <rect x="170" y="727" width="710" height="18" fill="#505052"/>
+    <rect x="170" y="766" width="710" height="21" fill="#505052"/>
+    <rect x="170" y="809" width="710" height="21" fill="#505052"/>
+    <path fill="#fdfaf5" d="M531.50,513.00 C524.92,514.17 503.75,516.17 492.00,520.00 C480.25,523.83 470.67,529.33 461.00,536.00 C451.33,542.67 441.33,552.00 434.00,560.00 C426.67,568.00 421.17,577.33 417.00,584.00 C412.83,590.67 411.33,594.67 409.00,600.00 C406.67,605.33 405.00,609.33 403.00,616.00 C401.00,622.67 398.83,630.67 397.00,640.00 C395.17,649.33 393.33,661.33 392.00,672.00 C390.67,682.67 389.83,694.67 389.00,704.00 C388.17,713.33 387.83,718.67 387.00,728.00 C386.17,737.33 385.33,748.00 384.00,760.00 C382.67,772.00 380.67,789.33 379.00,800.00 C377.33,810.67 375.67,816.67 374.00,824.00 C372.33,831.33 369.83,838.00 369.00,844.00 C368.17,850.00 369.00,857.33 369.00,860.00 L694.00,860.00 C694.00,857.33 694.83,850.00 694.00,844.00 C693.17,838.00 690.67,831.33 689.00,824.00 C687.33,816.67 685.67,810.67 684.00,800.00 C682.33,789.33 680.33,772.00 679.00,760.00 C677.67,748.00 676.83,737.33 676.00,728.00 C675.17,718.67 674.83,713.33 674.00,704.00 C673.17,694.67 672.33,682.67 671.00,672.00 C669.67,661.33 667.83,649.33 666.00,640.00 C664.17,630.67 662.00,622.67 660.00,616.00 C658.00,609.33 656.33,605.33 654.00,600.00 C651.67,594.67 650.17,590.67 646.00,584.00 C641.83,577.33 636.33,568.00 629.00,560.00 C621.67,552.00 611.67,542.67 602.00,536.00 C592.33,529.33 582.75,523.83 571.00,520.00 C559.25,516.17 538.08,514.17 531.50,513.00 Z"/>
+    <ellipse cx="471.5" cy="660" rx="27" ry="35.5" fill="#282b30"/>
+    <ellipse cx="584.5" cy="660" rx="27" ry="35.5" fill="#282b30"/>
+    <rect x="221" y="624" width="151" height="15" rx="7.5" fill="#ffffff"/>
+      <rect x="269" y="685" width="91" height="16" rx="8.0" fill="#ffffff"/>
+      <rect x="261" y="747" width="87" height="15" rx="7.5" fill="#ffffff"/>
+      <rect x="698" y="624" width="121" height="15" rx="7.5" fill="#ffffff"/>
+      <rect x="723" y="703" width="100" height="16" rx="8.0" fill="#ffffff"/>
+      <rect x="730" y="749" width="111" height="15" rx="7.5" fill="#ffffff"/>
+  </g>
+  <circle cx="268.3" cy="371.4" r="42" fill="#383838"/>
+  <circle cx="388.7" cy="371.3" r="42" fill="#383838"/>
+  <circle cx="513.5" cy="371.5" r="42" fill="#383838"/>
+  <rect x="262.3" y="334" width="12" height="30" rx="6" fill="#fdfdfd"/>
+  <rect x="382.7" y="334" width="12" height="30" rx="6" fill="#fdfdfd"/>
+  <rect x="507.5" y="334" width="12" height="30" rx="6" fill="#fdfdfd"/>
+  <circle cx="767" cy="371" r="42" fill="#eb786d"/>
+  </g>
 </svg>
