@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-  <gresource prefix="/io/github/janick_foundry/Tsuba">
+  <gresource prefix="/io/github/ampghost/AmpGhost">
     <file>style.css</file>
-    <file alias="icons/scalable/apps/io.github.janick_foundry.Tsuba.svg">icons/hicolor/scalable/apps/io.github.janick_foundry.Tsuba.svg</file>
-    <file alias="icons/symbolic/apps/io.github.janick_foundry.Tsuba-symbolic.svg">icons/hicolor/symbolic/apps/io.github.janick_foundry.Tsuba-symbolic.svg</file>
+    <file alias="icons/scalable/apps/io.github.ampghost.AmpGhost.svg">icons/hicolor/scalable/apps/io.github.ampghost.AmpGhost.svg</file>
+    <file alias="icons/symbolic/apps/io.github.ampghost.AmpGhost-symbolic.svg">icons/hicolor/symbolic/apps/io.github.ampghost.AmpGhost-symbolic.svg</file>
     <file alias="icons/scalable/actions/tsuba-amp-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-amp-symbolic.svg</file>
     <file alias="icons/scalable/actions/tsuba-booster-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-booster-symbolic.svg</file>
     <file alias="icons/scalable/actions/tsuba-cab-symbolic.svg">icons/hicolor/symbolic/actions/tsuba-cab-symbolic.svg</file>

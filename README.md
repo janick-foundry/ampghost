@@ -37,15 +37,15 @@ flatpak install --user tsuba-<version>-x86_64.flatpak
 
 The GNOME runtime is installed from Flathub when needed. The bundle does not update itself;
 install the bundle of a newer release to update. Inside the sandbox presets and backups live in
-`~/.var/app/io.github.janick_foundry.Tsuba/data/io.github.janick_foundry.Tsuba/`.
+`~/.var/app/io.github.ampghost.AmpGhost/data/io.github.ampghost.AmpGhost/`.
 
 To build the Flatpak from source you need `flatpak-builder` (or `org.flatpak.Builder` from
 Flathub) and the GNOME 51 SDK with the Rust stable extension:
 
 ```sh
 flatpak-builder --user --force-clean --install-deps-from=flathub --repo=repo flatpak_app \
-    build-aux/flatpak/io.github.janick_foundry.Tsuba.json
-flatpak build-bundle repo tsuba.flatpak io.github.janick_foundry.Tsuba \
+    build-aux/flatpak/io.github.ampghost.AmpGhost.json
+flatpak build-bundle repo tsuba.flatpak io.github.ampghost.AmpGhost \
     --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
 ```
 
@@ -106,7 +106,7 @@ without the amp. `tsl-import` checks the device, block lengths and official rang
 Status block and fills blocks missing from older files with the factory defaults.
 
 Presets and default backups live in the user data directory for the app id
-`io.github.janick_foundry.Tsuba`.
+`io.github.ampghost.AmpGhost`.
 
 ## License
 

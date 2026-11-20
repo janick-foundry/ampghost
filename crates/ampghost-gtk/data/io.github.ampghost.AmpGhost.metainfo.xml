@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.janick_foundry.Tsuba</id>
+  <id>io.github.ampghost.AmpGhost</id>
   <name>Tsuba</name>
   <summary>Control your BOSS Katana MK II amp</summary>
-  <developer id="io.github.janick_foundry">
+  <developer id="io.github.ampghost">
     <name>Jan Klíma</name>
   </developer>
   <metadata_license>CC0-1.0</metadata_license>
@@ -20,13 +20,13 @@
     <p>Tsuba only writes to the temporary patch of the amp. It never overwrites stored channels or system settings, and it backs up the temporary patch before every change. The Katana 50 MK II is supported. Other models are detected but stay read only.</p>
     <p>BOSS and KATANA are trademarks of Roland Corporation. Tsuba is not affiliated with or endorsed by Roland Corporation.</p>
   </description>
-  <launchable type="desktop-id">io.github.janick_foundry.Tsuba.desktop</launchable>
+  <launchable type="desktop-id">io.github.ampghost.AmpGhost.desktop</launchable>
   <provides>
     <binary>tsuba</binary>
   </provides>
-  <url type="homepage">https://github.com/janick-foundry/tsuba</url>
-  <url type="bugtracker">https://github.com/janick-foundry/tsuba/issues</url>
-  <url type="vcs-browser">https://github.com/janick-foundry/tsuba</url>
+  <url type="homepage">https://github.com/ampghost/ampghost</url>
+  <url type="bugtracker">https://github.com/ampghost/ampghost/issues</url>
+  <url type="vcs-browser">https://github.com/ampghost/ampghost</url>
   <branding>
     <color type="primary" scheme_preference="light">#deddda</color>
     <color type="primary" scheme_preference="dark">#3d3846</color>

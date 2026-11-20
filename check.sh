@@ -36,7 +36,7 @@ if rg -n --type rust -e '#\[(test|cfg\(test\))\]' crates || find crates -type d 
 fi
 
 step "single app id definition"
-count=$(rg -c --fixed-strings 'io.github.janick_foundry.Tsuba' --type rust crates | awk -F: '{s+=$2} END {print s+0}')
+count=$(rg -c --fixed-strings 'io.github.ampghost.AmpGhost' --type rust crates | awk -F: '{s+=$2} END {print s+0}')
 if [[ "$count" != "1" ]]; then
     printf 'app id must be defined exactly once in Rust sources, found %s\n' "$count" >&2
     exit 1
