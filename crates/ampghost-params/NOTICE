@@ -1,0 +1,48 @@
+ampghost-params: parameter maps for the BOSS Katana MK II
+=======================================================
+
+The file data/params.json is derived from Katana Mk2 FxFloorBoard.
+
+Author:   Colin Willcocks (gumtown)
+Project:  Katana Mk2 FxFloorBoard
+Source:   https://sourceforge.net/projects/fxfloorboard/files/KatanaFxFloorBoard/Katana%20FxFloorboard%20for%20MK2%20Desktop/
+Archive:  Katana_Mk2_FxFloorBoard_source_code_20240515.zip
+          sha256 670b8c10733e1b2bedcfba6fc9259e524734c1c5fe2134911153b549088f6dbf
+Input:    midi.xml from that archive, version 2.02
+          sha256 (UTF-16 original) c14ac5bb914f5496634d87442aae35876eed02d26b715c7e96218171cfb1ccd5
+          sha256 (UTF-8 conversion) d56e6503e86b22897acd54ac4e93168f5892b2a6dfda78f0a91d331cc218d7a5
+
+Source license notes
+--------------------
+
+The FxFloorBoard source files carry GPL version 2 or later headers and the archive ships the
+GPL version 3 text as license.txt. midi.xml itself carries an "All rights reserved" line without
+an explicit license of its own; it is treated as part of the GPL-licensed program. The derived
+data in this crate is distributed under GPL-3.0-or-later together with the rest of Tsuba.
+Residual risk: should the copyright holder consider midi.xml separately licensed, the derived
+table would have to be replaced with independently researched data.
+
+Changes made to the derived data
+--------------------------------
+
+* Addresses, sizes, ranges and labels were converted into a flat JSON table (704 parameters).
+* patch_size corrected from 3912 to 1992 (RQ1 size 00 00 0F 48, as measured on the amp).
+* The variant_select_values table was removed; type/variant linkage lives in ampghost-protocol.
+* Contour Freq Shift was moved from the unused byte 06 1A to the per-contour slots 0F 31, 0F 39
+  and 0F 41, and Contour Shape (0F 30, 0F 38, 0F 40) was added, matching the FxFloorBoard UI
+  (stompbox_cab.cpp). Contour Select options are labelled Contour 1 to Contour 3.
+* Each entry is tagged "research" ([R], taken from FxFloorBoard) unless it was verified on a real
+  Katana 50 MK II ([V], with the verification date).
+* Sixteen entries that BOSS TONE STUDIO for KATANA MkII 2.1.0 keeps hidden and fixed
+  (address_map.js entries without a name) are marked "hidden" and locked to the official
+  values: 00 23 Preamp 10, 00 2A Gain SW 1, 00 36 and 00 37 Bass/Treble Freq 0 to 10, and for
+  MOD (02 xx) and FX (04 xx) 0F Separ 0, 17 RT Speed 1, 1A and 1B RT Rise/Fall Time 0,
+  28 VB Off/On 1, 29 VB Rise Time 0. Hidden entries are not shown and not written one by one.
+* Delay types 3 to 5 (Dual series, Dual parallel, Dual L/R) and reverb types 0 and 2 (Ambience,
+  Hall1) were removed from the type choices at 05 01, 05 21, 05 41 and the variant types
+  06 2D to 06 35, and the remaining choices follow the official menu order.
+* The chain slots 06 00 to 06 13 are marked hidden. The official editor treats them as padding
+  and sets the signal chain only through the CHAIN pattern at 06 20 (0 to 6).
+* data/official_ranges.json lists the official raw range of every Temporary patch byte
+  (60 00 xx xx) from BOSS TONE STUDIO 2.1.0 address_map.js, as page, byte, size, min, max.
+  Full patch writes normalise fixed values and reject any other value outside these ranges.

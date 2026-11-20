@@ -19,13 +19,13 @@ Saving the temporary patch to an amp channel is not implemented.
 
 | Crate | Purpose |
 | --- | --- |
-| `tsuba-protocol` | Roland SysEx frames, addresses, identity, device profiles, write plans, verification |
-| `tsuba-params` | Parameter table derived from Katana Mk2 FxFloorBoard (see its NOTICE) |
-| `tsuba-midi` | `MidiTransport` trait, midir backend behind the `native` feature |
-| `tsuba-store` | Preset JSON and `.syx` backup formats, `PresetStorage` trait |
-| `tsuba-engine` | Commands and events, sessions, file storage and engine thread (`native`) |
-| `tsuba-cli` | Diagnostic command line tool |
-| `tsuba-gtk` | GTK 4 / libadwaita desktop app (the only crate with GUI dependencies) |
+| `ampghost-protocol` | Roland SysEx frames, addresses, identity, device profiles, write plans, verification |
+| `ampghost-params` | Parameter table derived from Katana Mk2 FxFloorBoard (see its NOTICE) |
+| `ampghost-midi` | `MidiTransport` trait, midir backend behind the `native` feature |
+| `ampghost-store` | Preset JSON and `.syx` backup formats, `PresetStorage` trait |
+| `ampghost-engine` | Commands and events, sessions, file storage and engine thread (`native`) |
+| `ampghost-cli` | Diagnostic command line tool |
+| `ampghost-gtk` | GTK 4 / libadwaita desktop app (the only crate with GUI dependencies) |
 
 ## Install
 
@@ -65,7 +65,7 @@ cargo build --workspace
 ## Desktop app
 
 ```sh
-cargo run -p tsuba-gtk
+cargo run -p ampghost-gtk
 ```
 
 The header bar holds the channel buttons, the current patch name, the connection state and the
@@ -79,24 +79,24 @@ backed up automatically. Unknown models are shown with their identity and stay r
 ## CLI
 
 ```sh
-tsuba-cli detect
-tsuba-cli read-temp [--dump]
-tsuba-cli backup [--out FILE.syx]
-tsuba-cli restore FILE.syx
-tsuba-cli write-temp FILE.syx
-tsuba-cli read-param amp_volume
-tsuba-cli write-param amp_volume 50
-tsuba-cli preset-save "My Lead"
-tsuba-cli preset-apply "My Lead"
-tsuba-cli preset-list
-tsuba-cli switch-channel B1 --discard-temp
-tsuba-cli backup-all --out FILE.alb [--replace]
-tsuba-cli backup-all --plan
-tsuba-cli alb-info FILE.alb
-tsuba-cli tsl-export --out FILE.tsl [--name LIVESET] PRESET...
-tsuba-cli tsl-export --out FILE.tsl --from-temp
-tsuba-cli tsl-import FILE.tsl [--index N] [--name NAME] [--replace] [--dry-run]
-tsuba-cli tsl-import FILE.tsl --index N --to-temp
+ampghost-cli detect
+ampghost-cli read-temp [--dump]
+ampghost-cli backup [--out FILE.syx]
+ampghost-cli restore FILE.syx
+ampghost-cli write-temp FILE.syx
+ampghost-cli read-param amp_volume
+ampghost-cli write-param amp_volume 50
+ampghost-cli preset-save "My Lead"
+ampghost-cli preset-apply "My Lead"
+ampghost-cli preset-list
+ampghost-cli switch-channel B1 --discard-temp
+ampghost-cli backup-all --out FILE.alb [--replace]
+ampghost-cli backup-all --plan
+ampghost-cli alb-info FILE.alb
+ampghost-cli tsl-export --out FILE.tsl [--name LIVESET] PRESET...
+ampghost-cli tsl-export --out FILE.tsl --from-temp
+ampghost-cli tsl-import FILE.tsl [--index N] [--name NAME] [--replace] [--dry-run]
+ampghost-cli tsl-import FILE.tsl --index N --to-temp
 ```
 
 `backup-all` is read only: it sends RQ1 requests for System and the stored patch rows the model

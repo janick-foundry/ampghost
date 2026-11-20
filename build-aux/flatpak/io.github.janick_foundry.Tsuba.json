@@ -27,15 +27,15 @@
         }
       },
       "build-commands": [
-        "cargo --offline build --release --locked --ignore-rust-version -p tsuba-gtk",
+        "cargo --offline build --release --locked --ignore-rust-version -p ampghost-gtk",
         "install -Dm755 target/release/tsuba -t /app/bin",
-        "install -Dm644 crates/tsuba-gtk/data/io.github.janick_foundry.Tsuba.desktop -t /app/share/applications",
-        "install -Dm644 crates/tsuba-gtk/data/io.github.janick_foundry.Tsuba.metainfo.xml -t /app/share/metainfo",
-        "install -Dm644 crates/tsuba-gtk/data/icons/hicolor/scalable/apps/io.github.janick_foundry.Tsuba.svg -t /app/share/icons/hicolor/scalable/apps",
-        "install -Dm644 crates/tsuba-gtk/data/icons/hicolor/symbolic/apps/io.github.janick_foundry.Tsuba-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps",
+        "install -Dm644 crates/ampghost-gtk/data/io.github.janick_foundry.Tsuba.desktop -t /app/share/applications",
+        "install -Dm644 crates/ampghost-gtk/data/io.github.janick_foundry.Tsuba.metainfo.xml -t /app/share/metainfo",
+        "install -Dm644 crates/ampghost-gtk/data/icons/hicolor/scalable/apps/io.github.janick_foundry.Tsuba.svg -t /app/share/icons/hicolor/scalable/apps",
+        "install -Dm644 crates/ampghost-gtk/data/icons/hicolor/symbolic/apps/io.github.janick_foundry.Tsuba-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps",
         "install -Dm644 NOTICE /app/share/licenses/io.github.janick_foundry.Tsuba/NOTICE",
-        "install -Dm644 crates/tsuba-params/NOTICE /app/share/licenses/io.github.janick_foundry.Tsuba/NOTICE-tsuba-params",
-        "install -Dm644 crates/tsuba-gtk/data/icons/LICENSE-lucide crates/tsuba-gtk/data/icons/LICENSE-phosphor -t /app/share/licenses/io.github.janick_foundry.Tsuba"
+        "install -Dm644 crates/ampghost-params/NOTICE /app/share/licenses/io.github.janick_foundry.Tsuba/NOTICE-ampghost-params",
+        "install -Dm644 crates/ampghost-gtk/data/icons/LICENSE-lucide crates/ampghost-gtk/data/icons/LICENSE-phosphor -t /app/share/licenses/io.github.janick_foundry.Tsuba"
       ],
       "sources": [
         {

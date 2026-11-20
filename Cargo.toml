@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/tsuba-protocol",
-    "crates/tsuba-params",
-    "crates/tsuba-midi",
-    "crates/tsuba-store",
-    "crates/tsuba-engine",
-    "crates/tsuba-cli",
-    "crates/tsuba-gtk",
+    "crates/ampghost-protocol",
+    "crates/ampghost-params",
+    "crates/ampghost-midi",
+    "crates/ampghost-store",
+    "crates/ampghost-engine",
+    "crates/ampghost-cli",
+    "crates/ampghost-gtk",
 ]
 
 [workspace.package]
@@ -21,11 +21,11 @@ repository = "https://github.com/janick-foundry/tsuba"
 homepage = "https://github.com/janick-foundry/tsuba"
 
 [workspace.dependencies]
-tsuba-protocol = { path = "crates/tsuba-protocol" }
-tsuba-params = { path = "crates/tsuba-params" }
-tsuba-midi = { path = "crates/tsuba-midi", default-features = false }
-tsuba-store = { path = "crates/tsuba-store" }
-tsuba-engine = { path = "crates/tsuba-engine", default-features = false }
+ampghost-protocol = { path = "crates/ampghost-protocol" }
+ampghost-params = { path = "crates/ampghost-params" }
+ampghost-midi = { path = "crates/ampghost-midi", default-features = false }
+ampghost-store = { path = "crates/ampghost-store" }
+ampghost-engine = { path = "crates/ampghost-engine", default-features = false }
 thiserror = "2.0.21"
 anyhow = "1.0.104"
 serde = { version = "1.0.229", features = ["derive"] }

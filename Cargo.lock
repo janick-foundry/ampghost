@@ -35,6 +35,91 @@ dependencies = [
 ]
 
 [[package]]
+name = "ampghost-cli"
+version = "0.1.0"
+dependencies = [
+ "ampghost-engine",
+ "ampghost-midi",
+ "ampghost-params",
+ "ampghost-protocol",
+ "ampghost-store",
+ "anyhow",
+ "clap",
+ "sha2",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "ampghost-engine"
+version = "0.1.0"
+dependencies = [
+ "ampghost-midi",
+ "ampghost-params",
+ "ampghost-protocol",
+ "ampghost-store",
+ "directories",
+ "humantime",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "ampghost-gtk"
+version = "0.1.0"
+dependencies = [
+ "ampghost-engine",
+ "ampghost-midi",
+ "ampghost-params",
+ "ampghost-protocol",
+ "ampghost-store",
+ "anyhow",
+ "gettext-rs",
+ "glib-build-tools",
+ "gtk4",
+ "libadwaita",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "ampghost-midi"
+version = "0.1.0"
+dependencies = [
+ "alsa",
+ "midir",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "ampghost-params"
+version = "0.1.0"
+dependencies = [
+ "ampghost-protocol",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "ampghost-protocol"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "ampghost-store"
+version = "0.1.0"
+dependencies = [
+ "ampghost-protocol",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "android-build"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1566,91 +1651,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "tsuba-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "sha2",
- "tracing",
- "tracing-subscriber",
- "tsuba-engine",
- "tsuba-midi",
- "tsuba-params",
- "tsuba-protocol",
- "tsuba-store",
-]
-
-[[package]]
-name = "tsuba-engine"
-version = "0.1.0"
-dependencies = [
- "directories",
- "humantime",
- "thiserror 2.0.21",
- "tracing",
- "tsuba-midi",
- "tsuba-params",
- "tsuba-protocol",
- "tsuba-store",
-]
-
-[[package]]
-name = "tsuba-gtk"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gettext-rs",
- "glib-build-tools",
- "gtk4",
- "libadwaita",
- "tracing",
- "tracing-subscriber",
- "tsuba-engine",
- "tsuba-midi",
- "tsuba-params",
- "tsuba-protocol",
- "tsuba-store",
-]
-
-[[package]]
-name = "tsuba-midi"
-version = "0.1.0"
-dependencies = [
- "alsa",
- "midir",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "tsuba-params"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tsuba-protocol",
-]
-
-[[package]]
-name = "tsuba-protocol"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "tsuba-store"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tsuba-protocol",
 ]
 
 [[package]]

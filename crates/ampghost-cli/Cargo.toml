@@ -1,0 +1,30 @@
+[package]
+name = "ampghost-cli"
+description = "Internal diagnostic command line tool for Tsuba"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "ampghost-cli"
+path = "src/main.rs"
+
+[dependencies]
+ampghost-engine = { workspace = true, features = ["native"] }
+ampghost-midi = { workspace = true, features = ["native"] }
+ampghost-params.workspace = true
+ampghost-protocol.workspace = true
+ampghost-store.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+sha2.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

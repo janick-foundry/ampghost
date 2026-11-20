@@ -8,13 +8,13 @@ License, or (at your option) any later version. See LICENSE.
 Third-party material
 --------------------
 
-Parameter maps in crates/tsuba-params/data/params.json are derived from Katana Mk2 FxFloorBoard
+Parameter maps in crates/ampghost-params/data/params.json are derived from Katana Mk2 FxFloorBoard
 by Colin Willcocks (gumtown), which is distributed under the GNU General Public License.
-Full attribution, source location and checksums are in crates/tsuba-params/NOTICE.
+Full attribution, source location and checksums are in crates/ampghost-params/NOTICE.
 
-Interface icons in crates/tsuba-gtk/data/icons/hicolor/symbolic/actions are converted from Lucide
+Interface icons in crates/ampghost-gtk/data/icons/hicolor/symbolic/actions are converted from Lucide
 (ISC licence, with icons derived from Feather under the MIT licence) and Phosphor Icons core
-(MIT licence); see crates/tsuba-gtk/data/icons/LICENSE-lucide and LICENSE-phosphor. The Pedal FX
+(MIT licence); see crates/ampghost-gtk/data/icons/LICENSE-lucide and LICENSE-phosphor. The Pedal FX
 icon is original to this project and drawn in the Lucide style.
 
 BOSS and KATANA are trademarks of Roland Corporation. This project is not affiliated with or
