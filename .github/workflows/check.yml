@@ -27,6 +27,7 @@ jobs:
         shell: bash
         run: |
           flatpak info org.gnome.Sdk//51 >/dev/null || flatpak install -y --noninteractive flathub org.gnome.Sdk//51
+          mkdir -p .ci/cargo .ci/rustup .ci/target
           flatpak run --share=network --filesystem="$PWD" \
             --env=CARGO_HOME="$PWD/.ci/cargo" --env=RUSTUP_HOME="$PWD/.ci/rustup" \
             --env=CARGO_TARGET_DIR="$PWD/.ci/target" --env=PATH="$PWD/.ci/cargo/bin:/usr/bin:/bin" \
