@@ -1,0 +1,3 @@
+[alias]
+dev = "run -p ampghost-gtk --features dev"
+dev-cli = "run -p ampghost-cli --features dev --"

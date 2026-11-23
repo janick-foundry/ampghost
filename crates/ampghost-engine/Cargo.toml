@@ -12,6 +12,7 @@ repository.workspace = true
 [features]
 default = ["native"]
 native = ["ampghost-midi/native"]
+dev = []
 
 [dependencies]
 ampghost-protocol.workspace = true

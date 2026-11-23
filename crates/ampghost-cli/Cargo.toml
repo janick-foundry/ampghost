@@ -13,6 +13,9 @@ repository.workspace = true
 name = "ampghost-cli"
 path = "src/main.rs"
 
+[features]
+dev = ["ampghost-engine/dev"]
+
 [dependencies]
 ampghost-engine = { workspace = true, features = ["native"] }
 ampghost-midi = { workspace = true, features = ["native"] }

@@ -10,6 +10,9 @@ cargo fmt --all --check
 step "cargo clippy"
 cargo clippy --workspace --all-targets -- -D warnings
 
+step "cargo clippy (dev feature)"
+cargo clippy -p ampghost-engine -p ampghost-gtk -p ampghost-cli --features dev --all-targets -- -D warnings
+
 step "cargo build"
 cargo build --workspace
 

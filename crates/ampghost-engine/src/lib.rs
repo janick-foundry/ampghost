@@ -22,4 +22,15 @@ pub use error::EngineError;
 pub use native::{EngineHandle, FileStorage, SystemClock, default_data_dir, spawn};
 pub use timings::Timings;
 
-pub const APP_ID: &str = "io.github.janick_foundry.AmpGhost";
+macro_rules! base_app_id {
+    () => {
+        "io.github.janick_foundry.AmpGhost"
+    };
+}
+
+pub const BASE_APP_ID: &str = base_app_id!();
+#[cfg(not(feature = "dev"))]
+pub const APP_ID: &str = BASE_APP_ID;
+#[cfg(feature = "dev")]
+pub const APP_ID: &str = concat!(base_app_id!(), ".Devel");
+pub const DEV_BUILD: bool = cfg!(feature = "dev");

@@ -2,11 +2,19 @@
 use std::time::{Duration, UNIX_EPOCH};
 
 pub const BUILD_COMMIT: &str = env!("AMPGHOST_BUILD_COMMIT");
+#[cfg(not(feature = "dev"))]
 pub const VERSION_LABEL: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     " (",
     env!("AMPGHOST_BUILD_COMMIT"),
     ")"
+);
+#[cfg(feature = "dev")]
+pub const VERSION_LABEL: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("AMPGHOST_BUILD_COMMIT"),
+    ", dev)"
 );
 
 #[cfg(feature = "native")]

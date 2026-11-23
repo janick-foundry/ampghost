@@ -2,7 +2,7 @@ use adw::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use ampghost_engine::{APP_ID, PresetEntry};
+use ampghost_engine::{BASE_APP_ID, PresetEntry};
 use ampghost_params::SOURCE_ATTRIBUTION;
 use ampghost_protocol::Channel;
 
@@ -439,7 +439,7 @@ pub fn shortcuts(parent: &impl IsA<gtk::Widget>) {
 pub fn about(parent: &impl IsA<gtk::Widget>) {
     let dialog = adw::AboutDialog::builder()
         .application_name(tr("AmpGhost"))
-        .application_icon(APP_ID)
+        .application_icon(BASE_APP_ID)
         .developer_name("Jan Klíma")
         .developers(vec!["Jan Klíma"])
         .version(ampghost_engine::VERSION_LABEL)

@@ -19,7 +19,10 @@ fn main() -> glib::ExitCode {
         tracing::error!(%error, "registering resources failed");
         return glib::ExitCode::FAILURE;
     }
-    let app = adw::Application::builder().application_id(APP_ID).build();
+    let app = adw::Application::builder()
+        .application_id(APP_ID)
+        .resource_base_path("/io/github/janick_foundry/AmpGhost")
+        .build();
     app.connect_activate(|app| {
         if let Some(window) = app.active_window() {
             window.present();

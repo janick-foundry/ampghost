@@ -255,6 +255,9 @@ impl Ui {
             .height_request(WINDOW_MIN_HEIGHT)
             .content(&toasts)
             .build();
+        if ampghost_engine::DEV_BUILD {
+            window.add_css_class("devel");
+        }
 
         let ui = Rc::new(Self {
             table,
