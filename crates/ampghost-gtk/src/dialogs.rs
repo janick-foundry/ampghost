@@ -442,7 +442,13 @@ pub fn about(parent: &impl IsA<gtk::Widget>) {
         .application_icon(APP_ID)
         .developer_name("Jan Klíma")
         .developers(vec!["Jan Klíma"])
-        .version(env!("CARGO_PKG_VERSION"))
+        .version(ampghost_engine::VERSION_LABEL)
+        .debug_info(format!(
+            "Version: {}\nCommit: {}\nBuilt: {} (UTC)\n",
+            ampghost_engine::VERSION_LABEL,
+            ampghost_engine::BUILD_COMMIT,
+            ampghost_engine::build_time()
+        ))
         .license_type(gtk::License::Gpl30)
         .comments(tr("Edit the sound of a BOSS Katana MK II amplifier."))
         .build();

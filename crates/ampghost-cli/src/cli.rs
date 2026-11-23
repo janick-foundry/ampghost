@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 #[derive(Debug, Parser)]
 #[command(
     name = "ampghost-cli",
-    version,
+    version = ampghost_engine::VERSION_LABEL,
     about = "Internal diagnostic tool for the BOSS Katana MK II"
 )]
 pub struct Args {

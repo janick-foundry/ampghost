@@ -1,3 +1,4 @@
+mod build_info;
 mod clock;
 mod command;
 mod engine;
@@ -7,6 +8,9 @@ mod native;
 mod session;
 mod timings;
 
+#[cfg(feature = "native")]
+pub use build_info::build_time;
+pub use build_info::{BUILD_COMMIT, VERSION_LABEL};
 pub use clock::Clock;
 pub use command::{
     AmpSwitch, ChainOutcome, Command, DetectReport, DeviceInfo, Envelope, Event, ParamWrite,

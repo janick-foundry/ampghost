@@ -42,7 +42,6 @@
           "type": "dir",
           "path": "../..",
           "skip": [
-            ".git",
             "target",
             ".ci",
             ".flatpak-builder",

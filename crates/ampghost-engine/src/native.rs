@@ -36,7 +36,7 @@ impl Clock for SystemClock {
     }
 }
 
-fn rfc3339_seconds(time: SystemTime) -> String {
+pub(crate) fn rfc3339_seconds(time: SystemTime) -> String {
     let seconds = time
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
