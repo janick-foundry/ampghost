@@ -378,7 +378,7 @@ fn variant_row(
     )
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn to_raw(value: f64) -> u16 {
     value.round().clamp(0.0, f64::from(u16::MAX)) as u16
 }

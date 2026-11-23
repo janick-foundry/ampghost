@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 mod alb;
 mod blocks;
 mod error;

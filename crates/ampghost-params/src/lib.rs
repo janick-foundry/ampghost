@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 mod error;
 mod official;
 mod param;

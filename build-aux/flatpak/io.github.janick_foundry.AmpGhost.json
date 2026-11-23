@@ -44,6 +44,7 @@
           "skip": [
             ".git",
             "target",
+            ".ci",
             ".flatpak-builder",
             "flatpak_app",
             "repo"

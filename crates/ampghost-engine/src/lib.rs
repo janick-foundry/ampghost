@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 mod clock;
 mod command;
 mod engine;

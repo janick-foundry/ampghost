@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 mod cli;
 mod driver;
 mod files;

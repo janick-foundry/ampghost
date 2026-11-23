@@ -3,3 +3,4 @@
 /.flatpak-builder
 /flatpak_app
 /repo
+/.ci

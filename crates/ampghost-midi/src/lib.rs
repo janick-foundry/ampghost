@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 mod assemble;
 mod error;
 #[cfg(feature = "native")]

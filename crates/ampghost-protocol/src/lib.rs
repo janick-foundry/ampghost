@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 mod address;
 mod blocks;
 mod channel;

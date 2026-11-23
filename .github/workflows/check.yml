@@ -1,0 +1,38 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    env:
+      RUST_TOOLCHAIN: 1.100.0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .ci/cargo
+            .ci/rustup
+            .ci/target
+          key: check-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.lock') }}
+      - name: Run check.sh in the GNOME 51 SDK
+        shell: bash
+        run: |
+          flatpak info org.gnome.Sdk//51 >/dev/null || flatpak install -y --noninteractive flathub org.gnome.Sdk//51
+          flatpak run --share=network --filesystem="$PWD" \
+            --env=CARGO_HOME="$PWD/.ci/cargo" --env=RUSTUP_HOME="$PWD/.ci/rustup" \
+            --env=CARGO_TARGET_DIR="$PWD/.ci/target" --env=PATH="$PWD/.ci/cargo/bin:/usr/bin:/bin" \
+            --command=bash org.gnome.Sdk//51 -c '
+              set -euo pipefail
+              command -v rustup >/dev/null || curl -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --default-toolchain "$0" -c clippy,rustfmt
+              command -v cargo-deny >/dev/null || cargo install --locked cargo-deny
+              command -v rg >/dev/null || cargo install --locked ripgrep
+              ./check.sh' "$RUST_TOOLCHAIN"
