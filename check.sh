@@ -29,11 +29,35 @@ if rg -n --type rust -e '(^|[^:"\\])//' -e '/\*' -e '#!?\[doc' crates; then
     exit 1
 fi
 
-step "no automated tests"
-if rg -n --type rust -e '#\[(test|cfg\(test\))\]' crates || find crates -type d -name tests | grep -q .; then
-    printf 'automated tests are not part of this project\n' >&2
+step "automated tests only in approved places"
+test_allowed='^crates/(ampghost-protocol|ampghost-store)/tests/[a-z0-9_]+\.rs$|^crates/ampghost-cli/src/sha256/tests\.rs$|^crates/ampghost-engine/src/native/tests\.rs$'
+cfg_allowed='^crates/ampghost-cli/src/sha256\.rs$|^crates/ampghost-engine/src/native\.rs$'
+bad=0
+while IFS= read -r file; do
+    if ! [[ "$file" =~ $test_allowed ]]; then
+        printf 'tests are not allowed in %s\n' "$file" >&2
+        bad=1
+    fi
+done < <(rg -l --type rust -e '#\[test\]' crates || true)
+while IFS= read -r dir; do
+    if ! [[ "$dir" =~ ^crates/(ampghost-protocol|ampghost-store)/tests$ ]]; then
+        printf 'tests directory is not allowed: %s\n' "$dir" >&2
+        bad=1
+    fi
+done < <(find crates -type d -name tests -not -path '*/src/*')
+while IFS= read -r file; do
+    if ! [[ "$file" =~ $cfg_allowed ]] || [[ "$(rg -c --fixed-strings '#[cfg(test)]' "$file")" != "1" ]] \
+        || ! rg -q --multiline '^#\[cfg\(test\)\]\nmod tests;\n?\z' "$file"; then
+        printf 'cfg(test) is only allowed as a final "mod tests;" in approved modules: %s\n' "$file" >&2
+        bad=1
+    fi
+done < <(rg -l --type rust --fixed-strings 'cfg(test)' crates || true)
+if [[ "$bad" != "0" ]]; then
     exit 1
 fi
+
+step "cargo test"
+cargo test --workspace --all-targets
 
 step "single app id definition"
 count=$(rg -c --fixed-strings 'io.github.janick_foundry.AmpGhost' --type rust crates | awk -F: '{s+=$2} END {print s+0}')

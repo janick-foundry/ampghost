@@ -142,3 +142,6 @@ fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
         *slot = slot.wrapping_add(value);
     }
 }
+
+#[cfg(test)]
+mod tests;

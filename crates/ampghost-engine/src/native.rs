@@ -239,3 +239,6 @@ pub fn spawn(
         thread: Some(thread),
     })
 }
+
+#[cfg(test)]
+mod tests;
