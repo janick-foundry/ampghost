@@ -40,6 +40,17 @@
   </recommends>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.0" date="2026-11-23">
+      <description>
+        <ul>
+          <li>Follows knob changes made on the amp</li>
+          <li>Turns the amp's editor mode off again when the app closes</li>
+          <li>Shows the build commit in the About dialog</li>
+          <li>Shows the full cause of an error</li>
+          <li>Uses its own icons on the status pages and the ghost in the symbolic app icon</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-11-20">
       <description>
         <p>First release.</p>

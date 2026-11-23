@@ -36,7 +36,7 @@ dependencies = [
 
 [[package]]
 name = "ampghost-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ampghost-engine",
  "ampghost-midi",
@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "ampghost-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ampghost-midi",
  "ampghost-params",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "ampghost-gtk"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ampghost-engine",
  "ampghost-midi",
@@ -86,7 +86,7 @@ dependencies = [
 
 [[package]]
 name = "ampghost-midi"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "alsa",
  "midir",
@@ -96,7 +96,7 @@ dependencies = [
 
 [[package]]
 name = "ampghost-params"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ampghost-protocol",
  "serde",
@@ -106,14 +106,14 @@ dependencies = [
 
 [[package]]
 name = "ampghost-protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "ampghost-store"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ampghost-protocol",
  "serde",
