@@ -321,6 +321,7 @@ impl Engine {
         }
         let current_channel = Some(session.read_current_channel()?);
         let program_change_map = Some(session.read_program_change_map()?);
+        session.enter_editor_mode()?;
         Ok(DetectReport {
             device,
             current_channel,

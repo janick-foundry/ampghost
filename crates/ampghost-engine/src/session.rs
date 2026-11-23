@@ -405,8 +405,12 @@ impl Session {
     }
 
     fn editor_mode_on(&mut self, sink: &mut dyn FnMut(Event)) -> Result<(), EngineError> {
-        let profile = self.profile()?;
         sink(Event::Progress(Stage::EditorMode));
+        self.enter_editor_mode()
+    }
+
+    pub(crate) fn enter_editor_mode(&mut self) -> Result<(), EngineError> {
+        let profile = self.profile()?;
         self.send_packets(&[profile.editor_mode_on()?])?;
         self.editor_mode = true;
         Ok(())
