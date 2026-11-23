@@ -9,6 +9,37 @@ pub struct ParamWrite {
     pub value: u16,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct RequestId(u64);
+
+impl RequestId {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn value(self) -> u64 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for RequestId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}", self.0)
+    }
+}
+
+#[derive(Debug)]
+pub struct Envelope {
+    pub request: Option<RequestId>,
+    pub event: Event,
+}
+
+impl Envelope {
+    pub fn answers(&self, request: RequestId) -> bool {
+        self.request == Some(request) && self.event.is_terminal()
+    }
+}
+
 #[derive(Debug)]
 pub enum Command {
     Detect,

@@ -4,7 +4,7 @@ use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use ampghost_engine::{
-    Clock, Command, Engine, EngineHandle, Event, FileStorage, ParamWrite, SystemClock,
+    Clock, Command, Engine, EngineHandle, Envelope, Event, FileStorage, ParamWrite, SystemClock,
     apply_param_writes, default_data_dir, spawn,
 };
 use ampghost_midi::MidirBackend;
@@ -115,24 +115,28 @@ fn backup_location(action: &Action, data_dir: &Path) -> Result<(PathBuf, Option<
 
 struct Driver {
     handle: EngineHandle,
-    events: mpsc::Receiver<Event>,
+    events: mpsc::Receiver<Envelope>,
     interrupted: Arc<AtomicBool>,
 }
 
 impl Driver {
     fn request(&mut self, command: Command) -> Result<Event> {
-        self.handle.send(command)?;
+        let request = self.handle.send(command)?;
         let deadline = Instant::now() + EVENT_TIMEOUT;
         loop {
             if self.interrupted.load(Ordering::SeqCst) {
                 bail!("interrupted, closing the connection to the amp");
             }
-            let event = match self.events.recv_timeout(INTERRUPT_CHECK) {
-                Ok(event) => event,
+            let envelope = match self.events.recv_timeout(INTERRUPT_CHECK) {
+                Ok(envelope) => envelope,
                 Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() < deadline => continue,
                 Err(_) => bail!("engine did not answer"),
             };
-            match event {
+            if envelope.event.is_terminal() && !envelope.answers(request) {
+                tracing::debug!(event = ?envelope.event, "ignoring an answer to another request");
+                continue;
+            }
+            match envelope.event {
                 Event::Progress(stage) => tracing::info!(?stage, "progress"),
                 Event::Unsolicited(packet) => tracing::info!(%packet, "unsolicited from amp"),
                 Event::AmpSwitched(switch) => tracing::info!(

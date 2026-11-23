@@ -25,6 +25,8 @@ tracing-subscriber.workspace = true
 gtk.workspace = true
 adw.workspace = true
 glib-unix.workspace = true
+futures-channel.workspace = true
+futures-util.workspace = true
 libc.workspace = true
 gettext-rs.workspace = true
 

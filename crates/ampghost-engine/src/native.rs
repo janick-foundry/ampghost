@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -11,7 +11,7 @@ use ampghost_store::{PresetStorage, StoreError, validate_key};
 
 use crate::APP_ID;
 use crate::clock::Clock;
-use crate::command::{Command, Event};
+use crate::command::{Command, Envelope, Event, RequestId};
 use crate::engine::Engine;
 use crate::error::EngineError;
 
@@ -173,18 +173,21 @@ impl PresetStorage for FileStorage {
 }
 
 pub struct EngineHandle {
-    commands: Option<mpsc::Sender<Command>>,
+    commands: Option<mpsc::Sender<(RequestId, Command)>>,
+    next_request: AtomicU64,
     finished: mpsc::Receiver<()>,
     thread: Option<thread::JoinHandle<()>>,
 }
 
 impl EngineHandle {
-    pub fn send(&self, command: Command) -> Result<(), EngineError> {
+    pub fn send(&self, command: Command) -> Result<RequestId, EngineError> {
+        let request = RequestId::new(self.next_request.fetch_add(1, Ordering::Relaxed));
         self.commands
             .as_ref()
             .ok_or(EngineError::Stopped)?
-            .send(command)
-            .map_err(|_| EngineError::Stopped)
+            .send((request, command))
+            .map_err(|_| EngineError::Stopped)?;
+        Ok(request)
     }
 
     pub fn shutdown(mut self) {
@@ -195,7 +198,8 @@ impl EngineHandle {
         let Some(commands) = self.commands.take() else {
             return;
         };
-        if commands.send(Command::Shutdown).is_err() {
+        let request = RequestId::new(self.next_request.fetch_add(1, Ordering::Relaxed));
+        if commands.send((request, Command::Shutdown)).is_err() {
             tracing::debug!("engine already stopped");
         }
         drop(commands);
@@ -224,11 +228,15 @@ impl Drop for EngineHandle {
     }
 }
 
+fn tagged(sink: &mut dyn FnMut(Envelope), request: Option<RequestId>) -> impl FnMut(Event) + '_ {
+    move |event| sink(Envelope { request, event })
+}
+
 pub fn spawn(
     mut engine: Engine,
-    mut sink: Box<dyn FnMut(Event) + Send>,
+    mut sink: Box<dyn FnMut(Envelope) + Send>,
 ) -> std::io::Result<EngineHandle> {
-    let (commands, receiver) = mpsc::channel::<Command>();
+    let (commands, receiver) = mpsc::channel::<(RequestId, Command)>();
     let (finish, finished) = mpsc::channel::<()>();
     let ports_changed = Arc::new(AtomicBool::new(false));
     let notifier = Arc::clone(&ports_changed);
@@ -239,18 +247,18 @@ pub fn spawn(
             loop {
                 let message = receiver.recv_timeout(IDLE_POLL_INTERVAL);
                 if ports_changed.swap(false, Ordering::SeqCst) {
-                    engine.ports_changed(&mut *sink);
+                    engine.ports_changed(&mut tagged(&mut *sink, None));
                 }
                 match message {
-                    Ok(command) => {
+                    Ok((request, command)) => {
                         let stop = matches!(command, Command::Shutdown);
-                        engine.handle(command, &mut *sink);
+                        engine.handle(command, &mut tagged(&mut *sink, Some(request)));
                         if stop {
                             break;
                         }
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {
-                        engine.poll(IDLE_POLL_WINDOW, &mut *sink);
+                        engine.poll(IDLE_POLL_WINDOW, &mut tagged(&mut *sink, None));
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
@@ -262,6 +270,7 @@ pub fn spawn(
         })?;
     Ok(EngineHandle {
         commands: Some(commands),
+        next_request: AtomicU64::new(1),
         finished,
         thread: Some(thread),
     })

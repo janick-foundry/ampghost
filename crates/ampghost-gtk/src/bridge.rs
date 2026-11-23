@@ -1,15 +1,16 @@
 use std::path::PathBuf;
-use std::sync::{Arc, mpsc};
+use std::sync::Arc;
 
 use ampghost_engine::{
-    Engine, EngineHandle, Event, FileStorage, SystemClock, default_data_dir, spawn,
+    Engine, EngineHandle, Envelope, FileStorage, SystemClock, default_data_dir, spawn,
 };
 use ampghost_midi::MidirBackend;
 use anyhow::{Context, Result};
+use futures_channel::mpsc::{UnboundedReceiver, unbounded};
 
 pub struct Bridge {
     pub handle: EngineHandle,
-    pub events: mpsc::Receiver<Event>,
+    pub events: UnboundedReceiver<Envelope>,
     pub data_dir: PathBuf,
 }
 
@@ -23,11 +24,11 @@ pub fn start() -> Result<Bridge> {
         Box::new(presets),
         Box::new(backups),
     );
-    let (sender, events) = mpsc::channel();
+    let (sender, events) = unbounded();
     let handle = spawn(
         engine,
-        Box::new(move |event| {
-            if sender.send(event).is_err() {
+        Box::new(move |envelope| {
+            if sender.unbounded_send(envelope).is_err() {
                 tracing::debug!("user interface is gone");
             }
         }),

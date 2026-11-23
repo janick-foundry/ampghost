@@ -72,6 +72,8 @@ dependencies = [
  "ampghost-protocol",
  "ampghost-store",
  "anyhow",
+ "futures-channel",
+ "futures-util",
  "gettext-rs",
  "glib-build-tools",
  "glib-unix",

@@ -1,14 +1,13 @@
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::time::Duration;
 
 use adw::prelude::*;
 use ampghost_engine::{
-    AmpSwitch, ChainOutcome, Command, DetectReport, DeviceInfo, EngineError, EngineHandle, Event,
-    ParamWrite, PresetEntry, Stage, WriteOutcome, apply_param_writes,
+    AmpSwitch, ChainOutcome, Command, DetectReport, DeviceInfo, EngineError, EngineHandle,
+    Envelope, Event, ParamWrite, PresetEntry, Stage, WriteOutcome, apply_param_writes,
 };
 use ampghost_params::ParamTable;
 use ampghost_protocol::{
@@ -16,6 +15,8 @@ use ampghost_protocol::{
 };
 use ampghost_store::{FullBackup, TSL_MAX_PATCHES};
 use anyhow::{Context, Result};
+use futures_channel::mpsc::UnboundedReceiver;
+use futures_util::StreamExt;
 use gtk::{gio, glib};
 
 use crate::blocks::{self, BlockSpec, Variant};
@@ -23,72 +24,15 @@ use crate::bridge;
 use crate::dialogs::{self, SwitchChoice, ToneTarget};
 use crate::files::{self, ToneFile};
 use crate::i18n::{tr, trf};
+use crate::jobs::{FollowUp, Job, Jobs};
 use crate::params_view::{self, Edit, OnChange, ParamsView, Structure};
 use crate::report;
 
-const EVENT_PUMP: Duration = Duration::from_millis(30);
 const CONTINUOUS_WRITE_DEBOUNCE: Duration = Duration::from_millis(500);
 const STATUS_DELAY: Duration = Duration::from_millis(300);
 const TOGGLE_FADE: u32 = 250;
 
 type Handler = Box<dyn Fn(&Rc<Ui>)>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum FollowUp {
-    ApplyPreset { key: String, name: String },
-    PutBack(PatchImage),
-    SendTone { image: PatchImage, name: String },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Job {
-    Detect,
-    ReadTemp,
-    WriteParams,
-    WriteChain { undo: bool },
-    Switch(Channel),
-    Backup(FollowUp),
-    SavePreset,
-    UpdatePreset(String),
-    DeletePreset(String),
-    ApplyPreset(String),
-    PutBack,
-    ListPresets,
-    BackupAmp(PathBuf),
-    SaveTone(String),
-    SendTone(String),
-    ExportPresets(PathBuf),
-}
-
-impl Job {
-    fn shows_status(&self) -> bool {
-        !matches!(self, Self::ListPresets)
-    }
-
-    fn status_text(&self) -> String {
-        match self {
-            Self::Detect => tr("Looking for Katana…"),
-            Self::ReadTemp => tr("Reading from Katana…"),
-            Self::WriteParams => tr("Writing…"),
-            Self::WriteChain { undo: false } => tr("Changing signal chain…"),
-            Self::WriteChain { undo: true } => tr("Undoing chain change…"),
-            Self::Switch(channel) => {
-                trf("Switching to {channel}…", &[("channel", channel.label())])
-            }
-            Self::Backup(_) => tr("Backing up current sound…"),
-            Self::SavePreset => tr("Saving preset…"),
-            Self::UpdatePreset(name) => trf("Updating “{name}”…", &[("name", name)]),
-            Self::DeletePreset(name) => trf("Deleting “{name}”…", &[("name", name)]),
-            Self::ApplyPreset(name) => trf("Applying “{name}”…", &[("name", name)]),
-            Self::PutBack => tr("Putting your edits back…"),
-            Self::BackupAmp(_) => tr("Backing up amp…"),
-            Self::SaveTone(name) => trf("Saving “{name}”…", &[("name", name)]),
-            Self::SendTone(name) => trf("Sending “{name}” to temp…", &[("name", name)]),
-            Self::ExportPresets(_) => tr("Exporting presets…"),
-            Self::ListPresets => String::new(),
-        }
-    }
-}
 
 #[derive(Default)]
 struct Model {
@@ -143,7 +87,7 @@ pub struct Ui {
     sidebar: gtk::Box,
     engine: RefCell<Option<EngineHandle>>,
     model: RefCell<Model>,
-    jobs: RefCell<VecDeque<Job>>,
+    jobs: RefCell<Jobs>,
     updating: Rc<Cell<bool>>,
     pending: RefCell<BTreeMap<&'static str, u16>>,
     write_timers: RefCell<BTreeMap<&'static str, glib::SourceId>>,
@@ -173,22 +117,16 @@ pub fn present(app: &adw::Application) -> Result<()> {
     Ok(())
 }
 
-fn pump_events(ui: &Rc<Ui>, events: mpsc::Receiver<Event>) {
+fn pump_events(ui: &Rc<Ui>, mut events: UnboundedReceiver<Envelope>) {
     let ui = Rc::clone(ui);
-    glib::timeout_add_local(EVENT_PUMP, move || {
-        loop {
-            match events.try_recv() {
-                Ok(event) => ui.handle_event(event),
-                Err(mpsc::TryRecvError::Empty) => return glib::ControlFlow::Continue,
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    if ui.engine.borrow().is_some() {
-                        tracing::warn!("engine event channel closed unexpectedly");
-                    } else {
-                        tracing::debug!("engine event channel closed");
-                    }
-                    return glib::ControlFlow::Break;
-                }
-            }
+    glib::spawn_future_local(async move {
+        while let Some(envelope) = events.next().await {
+            ui.handle_event(envelope);
+        }
+        if ui.engine.borrow().is_some() {
+            tracing::warn!("engine event channel closed unexpectedly");
+        } else {
+            tracing::debug!("engine event channel closed");
         }
     });
 }
@@ -600,7 +538,7 @@ impl Ui {
                 selected: "amp",
                 ..Model::default()
             }),
-            jobs: RefCell::new(VecDeque::new()),
+            jobs: RefCell::new(Jobs::default()),
             updating: Rc::new(Cell::new(false)),
             pending: RefCell::new(BTreeMap::new()),
             write_timers: RefCell::new(BTreeMap::new()),
@@ -713,13 +651,13 @@ impl Ui {
             .as_ref()
             .map_or(Err(EngineError::Stopped), |handle| handle.send(command));
         match result {
-            Ok(()) => {
-                tracing::debug!(?job, "queued");
+            Ok(request) => {
+                tracing::debug!(%request, ?job, "queued");
                 let starts = self.jobs.borrow().is_empty();
                 if starts {
                     self.begin_status(&job);
                 }
-                self.jobs.borrow_mut().push_back(job);
+                self.jobs.borrow_mut().push(request, job);
                 self.refresh_sensitivity();
             }
             Err(error) => self.toast(&error.to_string()),
@@ -821,11 +759,17 @@ impl Ui {
         self.show_status_now(&text);
     }
 
-    fn handle_event(self: &Rc<Self>, event: Event) {
-        let job = if event.is_terminal() {
-            self.jobs.borrow_mut().pop_front()
-        } else {
-            None
+    fn handle_event(self: &Rc<Self>, envelope: Envelope) {
+        let Envelope { request, event } = envelope;
+        let job = match request {
+            Some(request) if event.is_terminal() => {
+                let job = self.jobs.borrow_mut().finish(request);
+                if job.is_none() {
+                    tracing::debug!(%request, "answer to a request without a job");
+                }
+                job
+            }
+            _ => None,
         };
         let ended = job.is_some();
         match event {

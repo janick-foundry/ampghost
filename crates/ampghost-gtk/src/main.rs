@@ -3,6 +3,7 @@ mod bridge;
 mod dialogs;
 mod files;
 mod i18n;
+mod jobs;
 mod params_view;
 mod report;
 mod window;
