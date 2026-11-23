@@ -5,7 +5,7 @@ use crate::error::ProtocolError;
 use crate::identity::Identity;
 use crate::patch::{PatchImage, PatchLayout, PatchOffset, Span};
 use crate::plan::{WriteOrder, plan_full_write, plan_partial_write};
-use crate::sysex::{Dt1, Rq1};
+use crate::sysex::{Dt1, Incoming, Rq1, SysexHeader};
 use crate::verify::{LinkedType, VerifyRules};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +18,7 @@ pub struct ChannelRow {
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeviceProfile {
     pub name: &'static str,
+    pub sysex: SysexHeader,
     pub identity_signature: [u8; 9],
     pub temp_patch: Address,
     pub patch_layout: PatchLayout,
@@ -38,6 +39,18 @@ pub struct DeviceProfile {
 impl DeviceProfile {
     pub fn matches(&self, identity: &Identity) -> bool {
         identity.signature() == self.identity_signature
+    }
+
+    pub fn encode_request(&self, request: &Rq1) -> Vec<u8> {
+        request.encode(&self.sysex)
+    }
+
+    pub fn encode_write(&self, packet: &Dt1) -> Vec<u8> {
+        packet.encode(&self.sysex)
+    }
+
+    pub fn decode(&self, message: &[u8]) -> Result<Incoming, ProtocolError> {
+        self.sysex.decode(message)
     }
 
     pub fn read_temp_request(&self) -> Rq1 {
@@ -236,6 +249,7 @@ const MK2_50_CHANNEL_ROWS: [ChannelRow; 5] = [
 
 pub static KATANA_50_MK2: DeviceProfile = DeviceProfile {
     name: "BOSS Katana 50 MK II",
+    sysex: SysexHeader::new(0x00, &[0x00, 0x00, 0x00, 0x33]),
     identity_signature: [0x41, 0x33, 0x03, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00],
     temp_patch: Address::from_parts(0x60, 0x00, 0x00, 0x00),
     patch_layout: PatchLayout::new(Size::from_parts(0x00, 0x00, 0x0F, 0x48), &MK2_RETURNED, 241),

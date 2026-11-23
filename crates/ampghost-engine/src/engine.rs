@@ -467,7 +467,7 @@ impl Engine {
         let session = self.session()?;
         let profile = session.profile()?;
         let image = session.read_temp()?;
-        let bytes = encode_syx(&image, profile.temp_patch)?;
+        let bytes = encode_syx(&image, profile)?;
         self.backups.write(&key, &bytes)?;
         Ok(Event::BackupSaved { key, image })
     }
@@ -553,7 +553,7 @@ impl Engine {
                 }
             }
         }
-        let bytes = encode_syx(&previous, profile.temp_patch)?;
+        let bytes = encode_syx(&previous, profile)?;
         self.backups.write(&key, &bytes)?;
         tracing::info!(%key, "temp backed up before reload");
         let session = self.session()?;
@@ -625,11 +625,7 @@ impl Engine {
         validate_key(key)?;
         let bytes = self.backups.read(key)?;
         let profile = self.session()?.profile()?;
-        Ok(decode_syx(
-            &bytes,
-            &profile.patch_layout,
-            profile.temp_patch,
-        )?)
+        Ok(decode_syx(&bytes, profile)?)
     }
 
     fn restore_backup(

@@ -1,25 +1,25 @@
-use ampghost_protocol::{Address, Incoming, PatchImage, PatchLayout, decode, split_messages};
+use ampghost_protocol::{DeviceProfile, Incoming, PatchImage, split_messages};
 
 use crate::error::StoreError;
 
-pub fn encode_syx(image: &PatchImage, base: Address) -> Result<Vec<u8>, StoreError> {
-    let packets = image.to_packets(base)?;
+pub fn encode_syx(image: &PatchImage, profile: &DeviceProfile) -> Result<Vec<u8>, StoreError> {
+    let packets = image.to_packets(profile.temp_patch)?;
     Ok(packets
         .iter()
-        .flat_map(ampghost_protocol::Dt1::encode)
+        .flat_map(|packet| profile.encode_write(packet))
         .collect())
 }
 
-pub fn decode_syx(
-    bytes: &[u8],
-    layout: &'static PatchLayout,
-    base: Address,
-) -> Result<PatchImage, StoreError> {
+pub fn decode_syx(bytes: &[u8], profile: &'static DeviceProfile) -> Result<PatchImage, StoreError> {
     let mut packets = Vec::new();
     for message in split_messages(bytes) {
-        if let Incoming::Dt1(packet) = decode(message)? {
+        if let Incoming::Dt1(packet) = profile.decode(message)? {
             packets.push(packet);
         }
     }
-    Ok(PatchImage::from_packets(layout, base, &packets)?)
+    Ok(PatchImage::from_packets(
+        &profile.patch_layout,
+        profile.temp_patch,
+        &packets,
+    )?)
 }

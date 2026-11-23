@@ -19,23 +19,19 @@ fn sample_image() -> Result<PatchImage, Box<dyn Error>> {
 #[test]
 fn syx_round_trips_temp_image() -> TestResult {
     let image = sample_image()?;
-    let bytes = encode_syx(&image, KATANA_50_MK2.temp_patch)?;
+    let bytes = encode_syx(&image, &KATANA_50_MK2)?;
     assert_eq!(bytes.first(), Some(&0xF0));
     assert_eq!(bytes.last(), Some(&0xF7));
-    let decoded = decode_syx(
-        &bytes,
-        &KATANA_50_MK2.patch_layout,
-        KATANA_50_MK2.temp_patch,
-    )?;
+    let decoded = decode_syx(&bytes, &KATANA_50_MK2)?;
     assert_eq!(decoded, image);
     Ok(())
 }
 
 #[test]
 fn syx_rejects_truncated_file() -> TestResult {
-    let bytes = encode_syx(&sample_image()?, KATANA_50_MK2.temp_patch)?;
+    let bytes = encode_syx(&sample_image()?, &KATANA_50_MK2)?;
     let half = bytes.get(..bytes.len() / 2).unwrap_or_default();
-    assert!(decode_syx(half, &KATANA_50_MK2.patch_layout, KATANA_50_MK2.temp_patch).is_err());
+    assert!(decode_syx(half, &KATANA_50_MK2).is_err());
     Ok(())
 }
 

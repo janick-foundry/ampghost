@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 
 use ampghost_midi::MidiTransport;
 use ampghost_protocol::{
-    Channel, DeviceProfile, Dt1, IDENTITY_REQUEST, Incoming, PatchAssembler, PatchImage,
-    PatchOffset, ProgramChangeMap, ProtocolError, Rq1, decode, parse_current_channel, profile_for,
+    Channel, DeviceProfile, Dt1, IDENTITY_REQUEST, Identity, Incoming, PatchAssembler, PatchImage,
+    PatchOffset, ProgramChangeMap, ProtocolError, Rq1, parse_current_channel, profile_for,
     program_change, verify,
 };
 
@@ -40,7 +40,7 @@ impl Session {
             let Some(bytes) = transport.receive(remaining)? else {
                 continue;
             };
-            if let Ok(Incoming::Identity(identity)) = decode(&bytes) {
+            if let Ok(identity) = Identity::parse(&bytes) {
                 let profile = profile_for(&identity);
                 tracing::info!(%port, %identity, supported = profile.is_some(), "identity reply");
                 return Ok(Self {
@@ -74,6 +74,20 @@ impl Session {
         })
     }
 
+    fn decode(&self, bytes: &[u8]) -> Result<Incoming, ProtocolError> {
+        match self.device.profile {
+            Some(profile) => profile.decode(bytes),
+            None => Ok(Identity::parse(bytes)
+                .map_or_else(|_| Incoming::Other(bytes.to_vec()), Incoming::Identity)),
+        }
+    }
+
+    fn send_request(&mut self, request: Rq1) -> Result<(), EngineError> {
+        let bytes = self.profile()?.encode_request(&request);
+        self.transport.send(&bytes)?;
+        Ok(())
+    }
+
     pub(crate) fn take_unsolicited(&mut self) -> Vec<Dt1> {
         std::mem::take(&mut self.unsolicited)
     }
@@ -86,7 +100,7 @@ impl Session {
         let Some(bytes) = self.transport.receive(remaining)? else {
             return Ok(None);
         };
-        match decode(&bytes) {
+        match self.decode(&bytes) {
             Ok(message) => Ok(Some(message)),
             Err(error) => {
                 tracing::warn!(
@@ -111,7 +125,7 @@ impl Session {
 
     fn request(&mut self, request: Rq1) -> Result<Vec<Dt1>, EngineError> {
         self.drain(self.timings.pre_request_drain)?;
-        self.transport.send(&request.encode())?;
+        self.send_request(request)?;
         let start = request.address().linear();
         let end = request.end();
         let deadline = self.clock.now() + self.timings.read_timeout;
@@ -160,7 +174,7 @@ impl Session {
     pub(crate) fn read_exact(&mut self, request: Rq1) -> Result<Vec<u8>, EngineError> {
         self.drain(self.timings.backup_gap)?;
         tracing::debug!(address = %request.address(), size = request.size().linear(), "backup RQ1");
-        self.transport.send(&request.encode())?;
+        self.send_request(request)?;
         let start = request.address().linear();
         let end = request.end();
         let expected = usize::try_from(request.size().linear()).unwrap_or_default();
@@ -176,7 +190,7 @@ impl Session {
             let Some(bytes) = self.transport.receive(remaining)? else {
                 continue;
             };
-            let packet = match decode(&bytes) {
+            let packet = match self.decode(&bytes) {
                 Ok(Incoming::Dt1(packet)) => packet,
                 Ok(_) => continue,
                 Err(error @ ProtocolError::Checksum { address, .. })
@@ -240,7 +254,7 @@ impl Session {
         let request = profile.read_temp_request();
         self.drain(self.timings.pre_request_drain)?;
         self.discard_superseded(request);
-        self.transport.send(&request.encode())?;
+        self.send_request(request)?;
         let deadline = self.clock.now() + self.timings.read_timeout;
         let mut assembler = PatchAssembler::new(&profile.patch_layout, profile.temp_patch);
         let mut received = 0;
@@ -362,7 +376,7 @@ impl Session {
         }
         for packet in packets {
             tracing::debug!(%packet, "write");
-            self.transport.send(&packet.encode())?;
+            self.transport.send(&profile.encode_write(packet))?;
             self.drain(self.timings.packet_gap)?;
         }
         self.hold_off_program_change();
@@ -406,7 +420,7 @@ impl Session {
         let packet = profile.editor_mode_off()?;
         profile.check_write(&packet)?;
         tracing::debug!(%packet, "write");
-        self.transport.send(&packet.encode())?;
+        self.transport.send(&profile.encode_write(&packet))?;
         self.editor_mode = false;
         Ok(true)
     }

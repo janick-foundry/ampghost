@@ -173,7 +173,7 @@ impl Driver {
             },
             Action::ReadTemp { dump } => {
                 let image = self.read_temp()?;
-                print_image(&image, &encode_syx(&image, PROFILE.temp_patch)?);
+                print_image(&image, &encode_syx(&image, PROFILE)?);
                 if dump {
                     print_dump(&image.to_packets(PROFILE.temp_patch)?);
                 }
@@ -183,7 +183,7 @@ impl Driver {
                 match self.request(Command::BackupTemp { key })? {
                     Event::BackupSaved { key, image } => {
                         println!("backup:     {}", backups.root().join(&key).display());
-                        print_image(&image, &encode_syx(&image, PROFILE.temp_patch)?);
+                        print_image(&image, &encode_syx(&image, PROFILE)?);
                     }
                     other => bail!("unexpected engine event {other:?}"),
                 }
@@ -195,7 +195,7 @@ impl Driver {
             Action::WriteTemp { file } => {
                 let bytes =
                     std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?;
-                let image = decode_syx(&bytes, &PROFILE.patch_layout, PROFILE.temp_patch)?;
+                let image = decode_syx(&bytes, PROFILE)?;
                 println!("writing:    {} ({})", file.display(), image.name());
                 match self.request(Command::WriteTemp(image))? {
                     Event::WriteVerified(outcome) => print_outcome(&outcome),
@@ -253,10 +253,7 @@ impl Driver {
                             outcome.attempts,
                             started.elapsed().as_millis()
                         );
-                        print_image(
-                            &outcome.temp,
-                            &encode_syx(&outcome.temp, PROFILE.temp_patch)?,
-                        );
+                        print_image(&outcome.temp, &encode_syx(&outcome.temp, PROFILE)?);
                     }
                     other => bail!("unexpected engine event {other:?}"),
                 }
@@ -309,14 +306,14 @@ impl Driver {
     fn restore(&mut self, file: &Path, key: String) -> Result<()> {
         let original =
             std::fs::read(file).with_context(|| format!("reading {}", file.display()))?;
-        let wanted = decode_syx(&original, &PROFILE.patch_layout, PROFILE.temp_patch)?;
+        let wanted = decode_syx(&original, PROFILE)?;
         println!("restoring:  {} ({})", file.display(), wanted.name());
         match self.request(Command::RestoreBackup { key })? {
             Event::Restored { outcome, .. } => print_outcome(&outcome),
             other => bail!("unexpected engine event {other:?}"),
         }
         let fresh = self.read_temp()?;
-        let fresh_syx = encode_syx(&fresh, PROFILE.temp_patch)?;
+        let fresh_syx = encode_syx(&fresh, PROFILE)?;
         let file_sha = sha256_hex(&original);
         let fresh_sha = sha256_hex(&fresh_syx);
         println!("file sha256:  {file_sha}");
