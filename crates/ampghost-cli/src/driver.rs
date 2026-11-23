@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ampghost_engine::{
     Clock, Command, Engine, EngineHandle, Event, FileStorage, ParamWrite, SystemClock,
@@ -21,6 +22,8 @@ use crate::output::{
 };
 
 const EVENT_TIMEOUT: Duration = Duration::from_secs(60);
+const INTERRUPT_CHECK: Duration = Duration::from_millis(100);
+const INTERRUPTED_EXIT: i32 = 130;
 const PROFILE: &DeviceProfile = &KATANA_50_MK2;
 const VALUE_SEARCH_LIMIT: u16 = 4096;
 
@@ -52,6 +55,7 @@ pub fn run(args: Args) -> Result<()> {
     }
     let (backup_root, backup_key) = backup_location(&args.command, &data_dir)?;
     let backups = FileStorage::new(backup_root).with_extension(".syx");
+    let interrupted = watch_interrupts()?;
     let engine = Engine::new(
         Box::new(MidirBackend::new()),
         Arc::new(SystemClock),
@@ -68,10 +72,29 @@ pub fn run(args: Args) -> Result<()> {
         }),
     )
     .context("starting engine thread")?;
-    let mut driver = Driver { handle, events };
+    let mut driver = Driver {
+        handle,
+        events,
+        interrupted,
+    };
     let result = driver.execute(args.command, backup_key, &backups);
     driver.handle.shutdown();
     result
+}
+
+fn watch_interrupts() -> Result<Arc<AtomicBool>> {
+    let interrupted = Arc::new(AtomicBool::new(false));
+    for signal in [signal_hook::consts::SIGINT, signal_hook::consts::SIGTERM] {
+        signal_hook::flag::register_conditional_shutdown(
+            signal,
+            INTERRUPTED_EXIT,
+            Arc::clone(&interrupted),
+        )
+        .context("installing the signal handler")?;
+        signal_hook::flag::register(signal, Arc::clone(&interrupted))
+            .context("installing the signal handler")?;
+    }
+    Ok(interrupted)
 }
 
 fn backup_location(action: &Action, data_dir: &Path) -> Result<(PathBuf, Option<String>)> {
@@ -93,16 +116,22 @@ fn backup_location(action: &Action, data_dir: &Path) -> Result<(PathBuf, Option<
 struct Driver {
     handle: EngineHandle,
     events: mpsc::Receiver<Event>,
+    interrupted: Arc<AtomicBool>,
 }
 
 impl Driver {
     fn request(&mut self, command: Command) -> Result<Event> {
         self.handle.send(command)?;
+        let deadline = Instant::now() + EVENT_TIMEOUT;
         loop {
-            let event = self
-                .events
-                .recv_timeout(EVENT_TIMEOUT)
-                .map_err(|_| anyhow!("engine did not answer"))?;
+            if self.interrupted.load(Ordering::SeqCst) {
+                bail!("interrupted, closing the connection to the amp");
+            }
+            let event = match self.events.recv_timeout(INTERRUPT_CHECK) {
+                Ok(event) => event,
+                Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() < deadline => continue,
+                Err(_) => bail!("engine did not answer"),
+            };
             match event {
                 Event::Progress(stage) => tracing::info!(?stage, "progress"),
                 Event::Unsolicited(packet) => tracing::info!(%packet, "unsolicited from amp"),
@@ -214,7 +243,7 @@ impl Driver {
                         "switching the channel replaces the temp patch; pass --discard-temp to confirm"
                     );
                 }
-                let started = std::time::Instant::now();
+                let started = Instant::now();
                 match self.request(Command::SwitchChannel(channel))? {
                     Event::ChannelSwitched(outcome) => {
                         println!(

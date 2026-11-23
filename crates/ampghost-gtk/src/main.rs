@@ -29,7 +29,28 @@ fn main() -> glib::ExitCode {
             app.quit();
         }
     });
+    close_on_signals(&app);
     app.run()
+}
+
+fn close_on_signals(app: &adw::Application) {
+    for signal in [libc::SIGINT, libc::SIGTERM] {
+        let app = app.downgrade();
+        glib_unix::unix_signal_add_local(signal, move || {
+            let Some(app) = app.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+            tracing::info!(signal, "signal received, closing");
+            let windows = app.windows();
+            if windows.is_empty() {
+                app.quit();
+            }
+            for window in windows {
+                window.close();
+            }
+            glib::ControlFlow::Continue
+        });
+    }
 }
 
 fn init_tracing() {

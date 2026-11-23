@@ -21,6 +21,7 @@ ampghost-protocol.workspace = true
 ampghost-store.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+signal-hook.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
