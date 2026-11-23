@@ -8,4 +8,6 @@ pub use assemble::SysexAssembler;
 pub use error::MidiError;
 #[cfg(feature = "native")]
 pub use native::MidirBackend;
-pub use transport::{KATANA_PORT_MARKER, MidiBackend, MidiTransport, PortInfo, katana_candidates};
+pub use transport::{
+    KATANA_PORT_MARKER, MidiBackend, MidiTransport, PortInfo, PortWatch, katana_candidates,
+};

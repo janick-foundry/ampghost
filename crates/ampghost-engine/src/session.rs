@@ -20,6 +20,7 @@ pub(crate) struct Session {
     device: DeviceInfo,
     unsolicited: Vec<Dt1>,
     program_change_ready: Option<Instant>,
+    editor_mode: bool,
 }
 
 impl Session {
@@ -53,6 +54,7 @@ impl Session {
                     },
                     unsolicited: Vec::new(),
                     program_change_ready: None,
+                    editor_mode: false,
                 });
             }
         }
@@ -391,7 +393,22 @@ impl Session {
     fn editor_mode_on(&mut self, sink: &mut dyn FnMut(Event)) -> Result<(), EngineError> {
         let profile = self.profile()?;
         sink(Event::Progress(Stage::EditorMode));
-        self.send_packets(&[profile.editor_mode_on()?])
+        self.send_packets(&[profile.editor_mode_on()?])?;
+        self.editor_mode = true;
+        Ok(())
+    }
+
+    pub(crate) fn leave_editor_mode(&mut self) -> Result<bool, EngineError> {
+        if !self.editor_mode {
+            return Ok(false);
+        }
+        let profile = self.profile()?;
+        let packet = profile.editor_mode_off()?;
+        profile.check_write(&packet)?;
+        tracing::debug!(%packet, "write");
+        self.transport.send(&packet.encode())?;
+        self.editor_mode = false;
+        Ok(true)
     }
 
     pub(crate) fn write_verified(

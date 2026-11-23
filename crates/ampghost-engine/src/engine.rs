@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ampghost_midi::{MidiBackend, PortInfo, katana_candidates};
+use ampghost_midi::{MidiBackend, PortInfo, PortWatch, katana_candidates};
 use ampghost_params::{ParamTable, ParamsError};
 use ampghost_protocol::{
     Channel, DeviceProfile, Dt1, KATANA_50_MK2, LinkedType, PatchImage, PatchOffset, ProtocolError,
@@ -24,6 +24,7 @@ use crate::session::Session;
 use crate::timings::Timings;
 
 const OFFLINE_PROFILE: &DeviceProfile = &KATANA_50_MK2;
+const EDITOR_OFF_GRACE: Duration = Duration::from_millis(500);
 
 pub struct Engine {
     backend: Box<dyn MidiBackend>,
@@ -36,6 +37,7 @@ pub struct Engine {
     auto_connect: bool,
     next_port_check: Option<Instant>,
     probed: HashMap<String, u8>,
+    watch: Option<PortWatch>,
 }
 
 impl Engine {
@@ -56,15 +58,17 @@ impl Engine {
             auto_connect: false,
             next_port_check: None,
             probed: HashMap::new(),
+            watch: None,
         }
     }
 
-    pub fn watch_ports(&self, notify: Box<dyn Fn() + Send>) {
-        if let Err(error) = self.backend.watch(notify) {
-            tracing::warn!(
+    pub fn watch_ports(&mut self, notify: Box<dyn Fn() + Send>) {
+        match self.backend.watch(notify) {
+            Ok(watch) => self.watch = Some(watch),
+            Err(error) => tracing::warn!(
                 error = &error as &dyn std::error::Error,
                 "MIDI port announcements unavailable, checking ports periodically"
-            );
+            ),
         }
     }
 
@@ -259,9 +263,27 @@ impl Engine {
             Command::ListPresets => self.list_presets().map(Event::Presets),
             Command::ListBackups => Ok(Event::Backups(self.backups.list()?)),
             Command::Shutdown => {
-                self.session = None;
+                self.release_amp();
+                self.watch = None;
                 Ok(Event::ShutDown)
             }
+        }
+    }
+
+    fn release_amp(&mut self) {
+        let Some(mut session) = self.session.take() else {
+            return;
+        };
+        match session.leave_editor_mode() {
+            Ok(true) => {
+                tracing::info!(port = %session.device().port, "editor mode off sent");
+                self.clock.sleep(EDITOR_OFF_GRACE);
+            }
+            Ok(false) => {}
+            Err(error) => tracing::warn!(
+                error = &error as &dyn std::error::Error,
+                "could not turn editor mode off"
+            ),
         }
     }
 

@@ -5,17 +5,19 @@ use std::sync::{Arc, Mutex, PoisonError, Weak, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use alsa::poll::Descriptors;
 use alsa::seq::{Addr, ClientIter, EventType, PortCap, PortIter, PortSubscribe, PortType, Seq};
 use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 
 use crate::assemble::SysexAssembler;
 use crate::error::MidiError;
-use crate::transport::{MidiBackend, MidiTransport, PortInfo};
+use crate::transport::{MidiBackend, MidiTransport, PortInfo, PortWatch};
 
 const CLIENT_NAME: &str = "ampghost";
 const WATCH_CLIENT_NAME: &CStr = c"ampghost-watch";
 const ANNOUNCE_PORT_NAME: &CStr = c"announce";
 const RECEIVE_SLICE: Duration = Duration::from_millis(50);
+const WATCH_SLICE_MILLIS: i32 = 200;
 
 type Registry = Arc<Mutex<Vec<(String, Weak<AtomicBool>)>>>;
 
@@ -85,20 +87,33 @@ fn announce_seq() -> Result<Seq, MidiError> {
     Ok(seq)
 }
 
-fn watch_loop(seq: &Seq, open: &Registry, notify: &dyn Fn()) {
-    let mut known = port_names(seq);
+fn announced(seq: &Seq) -> Result<bool, alsa::Error> {
+    let mut fds = (seq, Some(alsa::Direction::Capture)).get()?;
+    if alsa::poll::poll(&mut fds, WATCH_SLICE_MILLIS)? == 0 {
+        return Ok(false);
+    }
     let mut input = seq.input();
+    let mut relevant = false;
+    while input.event_input_pending(true)? > 0 {
+        let event = input.event_input()?;
+        relevant |= matches!(
+            event.get_type(),
+            EventType::PortStart
+                | EventType::PortExit
+                | EventType::PortChange
+                | EventType::ClientStart
+                | EventType::ClientExit
+        );
+    }
+    Ok(relevant)
+}
+
+fn watch_loop(seq: &Seq, open: &Registry, notify: &dyn Fn(), stop: &AtomicBool) {
+    let mut known = port_names(seq);
     let mut failures = 0_u32;
-    loop {
-        let relevant = match input.event_input() {
-            Ok(event) => matches!(
-                event.get_type(),
-                EventType::PortStart
-                    | EventType::PortExit
-                    | EventType::PortChange
-                    | EventType::ClientStart
-                    | EventType::ClientExit
-            ),
+    while !stop.load(Ordering::SeqCst) {
+        let relevant = match announced(seq) {
+            Ok(relevant) => relevant,
             Err(error) => {
                 failures += 1;
                 if failures > 20 {
@@ -158,15 +173,17 @@ impl MidiBackend for MidirBackend {
         }))
     }
 
-    fn watch(&self, notify: Box<dyn Fn() + Send>) -> Result<(), MidiError> {
+    fn watch(&self, notify: Box<dyn Fn() + Send>) -> Result<PortWatch, MidiError> {
         let seq = announce_seq()?;
         let open = Arc::clone(&self.open);
-        thread::Builder::new()
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = Arc::clone(&stop);
+        let thread = thread::Builder::new()
             .name("ampghost-port-watch".to_owned())
-            .spawn(move || watch_loop(&seq, &open, &*notify))
+            .spawn(move || watch_loop(&seq, &open, &*notify, &stopped))
             .map_err(MidiError::Watcher)?;
         tracing::info!("watching MIDI port announcements");
-        Ok(())
+        Ok(PortWatch::new(stop, thread))
     }
 }
 

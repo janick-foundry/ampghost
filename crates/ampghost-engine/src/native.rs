@@ -2,7 +2,8 @@ use std::env;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -16,6 +17,7 @@ use crate::error::EngineError;
 
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const IDLE_POLL_WINDOW: Duration = Duration::from_millis(5);
+const SHUTDOWN_WAIT: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SystemClock;
@@ -170,36 +172,55 @@ impl PresetStorage for FileStorage {
     }
 }
 
-enum Message {
-    Command(Command),
-    PortsChanged,
-}
-
 pub struct EngineHandle {
-    commands: mpsc::Sender<Message>,
+    commands: Option<mpsc::Sender<Command>>,
+    finished: mpsc::Receiver<()>,
     thread: Option<thread::JoinHandle<()>>,
 }
 
 impl EngineHandle {
     pub fn send(&self, command: Command) -> Result<(), EngineError> {
         self.commands
-            .send(Message::Command(command))
+            .as_ref()
+            .ok_or(EngineError::Stopped)?
+            .send(command)
             .map_err(|_| EngineError::Stopped)
     }
 
     pub fn shutdown(mut self) {
-        if self
-            .commands
-            .send(Message::Command(Command::Shutdown))
-            .is_err()
-        {
+        self.stop();
+    }
+
+    fn stop(&mut self) {
+        let Some(commands) = self.commands.take() else {
+            return;
+        };
+        if commands.send(Command::Shutdown).is_err() {
             tracing::debug!("engine already stopped");
         }
-        if let Some(thread) = self.thread.take()
-            && thread.join().is_err()
-        {
-            tracing::error!("engine thread panicked");
+        drop(commands);
+        let Some(thread) = self.thread.take() else {
+            return;
+        };
+        match self.finished.recv_timeout(SHUTDOWN_WAIT) {
+            Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                if thread.join().is_err() {
+                    tracing::error!("engine thread panicked");
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                tracing::warn!(
+                    seconds = SHUTDOWN_WAIT.as_secs(),
+                    "engine did not stop in time, leaving it behind"
+                );
+            }
         }
+    }
+}
+
+impl Drop for EngineHandle {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 
@@ -207,35 +228,41 @@ pub fn spawn(
     mut engine: Engine,
     mut sink: Box<dyn FnMut(Event) + Send>,
 ) -> std::io::Result<EngineHandle> {
-    let (commands, receiver) = mpsc::channel::<Message>();
-    let notifier = commands.clone();
-    engine.watch_ports(Box::new(move || {
-        if notifier.send(Message::PortsChanged).is_err() {
-            tracing::debug!("engine gone, ignoring port change");
-        }
-    }));
+    let (commands, receiver) = mpsc::channel::<Command>();
+    let (finish, finished) = mpsc::channel::<()>();
+    let ports_changed = Arc::new(AtomicBool::new(false));
+    let notifier = Arc::clone(&ports_changed);
+    engine.watch_ports(Box::new(move || notifier.store(true, Ordering::SeqCst)));
     let thread = thread::Builder::new()
         .name("ampghost-engine".to_owned())
         .spawn(move || {
             loop {
-                match receiver.recv_timeout(IDLE_POLL_INTERVAL) {
-                    Ok(Message::Command(command)) => {
+                let message = receiver.recv_timeout(IDLE_POLL_INTERVAL);
+                if ports_changed.swap(false, Ordering::SeqCst) {
+                    engine.ports_changed(&mut *sink);
+                }
+                match message {
+                    Ok(command) => {
                         let stop = matches!(command, Command::Shutdown);
                         engine.handle(command, &mut *sink);
                         if stop {
                             break;
                         }
                     }
-                    Ok(Message::PortsChanged) => engine.ports_changed(&mut *sink),
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         engine.poll(IDLE_POLL_WINDOW, &mut *sink);
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
             }
+            drop(engine);
+            if finish.send(()).is_err() {
+                tracing::debug!("engine handle gone before the engine stopped");
+            }
         })?;
     Ok(EngineHandle {
-        commands,
+        commands: Some(commands),
+        finished,
         thread: Some(thread),
     })
 }

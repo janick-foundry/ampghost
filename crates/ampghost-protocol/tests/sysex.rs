@@ -142,3 +142,61 @@ fn full_write_plan_orders_type_selects_first_and_stays_in_temp() -> TestResult {
     assert_eq!(partial.len(), 1);
     Ok(())
 }
+
+#[test]
+fn editor_mode_frames_match_boss_tone_studio() -> TestResult {
+    let profile = &KATANA_50_MK2;
+    assert_eq!(
+        profile.editor_mode_off()?.encode(),
+        [
+            0xF0, 0x41, 0x00, 0x00, 0x00, 0x00, 0x33, 0x12, 0x7F, 0x00, 0x00, 0x01, 0x00, 0x00,
+            0xF7
+        ]
+    );
+    assert_eq!(
+        profile.editor_mode_on()?.encode(),
+        [
+            0xF0, 0x41, 0x00, 0x00, 0x00, 0x00, 0x33, 0x12, 0x7F, 0x00, 0x00, 0x01, 0x01, 0x7F,
+            0xF7
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn check_write_allows_editor_mode_on_and_off_only() -> TestResult {
+    let profile = &KATANA_50_MK2;
+    profile.check_write(&profile.editor_mode_on()?)?;
+    profile.check_write(&profile.editor_mode_off()?)?;
+    let editor = Address::from_parts(0x7F, 0x00, 0x00, 0x01);
+    for data in [
+        vec![0x02],
+        vec![0x7F],
+        vec![0x00, 0x00],
+        vec![0x01, 0x01],
+        vec![0x00, 0x01, 0x00],
+    ] {
+        let packet = Dt1::new(editor, data)?;
+        assert!(
+            matches!(
+                profile.check_write(&packet),
+                Err(ProtocolError::WriteForbidden { .. })
+            ),
+            "{packet}"
+        );
+    }
+    for address in [
+        Address::from_parts(0x7F, 0x00, 0x00, 0x00),
+        Address::from_parts(0x7F, 0x00, 0x00, 0x02),
+    ] {
+        let packet = Dt1::new(address, [0x00])?;
+        assert!(
+            matches!(
+                profile.check_write(&packet),
+                Err(ProtocolError::WriteForbidden { .. })
+            ),
+            "{packet}"
+        );
+    }
+    Ok(())
+}

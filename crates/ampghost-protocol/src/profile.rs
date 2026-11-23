@@ -53,7 +53,11 @@ impl DeviceProfile {
     }
 
     pub fn editor_mode_on(&self) -> Result<Dt1, ProtocolError> {
-        Dt1::new(self.editor_mode, [0x01])
+        Dt1::new(self.editor_mode, [EDITOR_MODE_ON])
+    }
+
+    pub fn editor_mode_off(&self) -> Result<Dt1, ProtocolError> {
+        Dt1::new(self.editor_mode, [EDITOR_MODE_OFF])
     }
 
     pub fn has_channel(&self, channel: Channel) -> bool {
@@ -130,8 +134,11 @@ impl DeviceProfile {
             address: packet.address(),
             len: packet.data().len(),
         };
-        if packet.address() == self.editor_mode && packet.data().len() == 1 {
-            return Ok(());
+        if packet.address() == self.editor_mode {
+            return match packet.data() {
+                [EDITOR_MODE_OFF | EDITOR_MODE_ON] => Ok(()),
+                _ => Err(forbidden()),
+            };
         }
         let start = packet
             .address()
@@ -157,6 +164,9 @@ impl DeviceProfile {
         Ok(packets)
     }
 }
+
+const EDITOR_MODE_OFF: u8 = 0x00;
+const EDITOR_MODE_ON: u8 = 0x01;
 
 const MK2_RETURNED: [Span; 2] = [
     Span::between(PatchOffset::new(0x00, 0x00), PatchOffset::new(0x07, 0x43)),
