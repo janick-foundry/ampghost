@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::ffi::CString;
+use std::ffi::CStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, Weak, mpsc};
 use std::thread;
@@ -13,7 +13,8 @@ use crate::error::MidiError;
 use crate::transport::{MidiBackend, MidiTransport, PortInfo};
 
 const CLIENT_NAME: &str = "ampghost";
-const WATCH_CLIENT_NAME: &str = "ampghost-watch";
+const WATCH_CLIENT_NAME: &CStr = c"ampghost-watch";
+const ANNOUNCE_PORT_NAME: &CStr = c"announce";
 const RECEIVE_SLICE: Duration = Duration::from_millis(50);
 
 type Registry = Arc<Mutex<Vec<(String, Weak<AtomicBool>)>>>;
@@ -27,10 +28,6 @@ impl MidirBackend {
     pub fn new() -> Self {
         Self::default()
     }
-}
-
-fn init_error(error: &alsa::Error) -> MidiError {
-    MidiError::Init(error.to_string())
 }
 
 fn port_names(seq: &Seq) -> BTreeSet<String> {
@@ -71,28 +68,20 @@ fn mark_gone(open: &Registry, present: &BTreeSet<String>) {
 }
 
 fn announce_seq() -> Result<Seq, MidiError> {
-    let seq = Seq::open(None, Some(alsa::Direction::Capture), false)
-        .map_err(|error| init_error(&error))?;
-    let client =
-        CString::new(WATCH_CLIENT_NAME).map_err(|error| MidiError::Init(error.to_string()))?;
-    seq.set_client_name(&client)
-        .map_err(|error| init_error(&error))?;
-    let port_name = CString::new("announce").map_err(|error| MidiError::Init(error.to_string()))?;
-    let port = seq
-        .create_simple_port(
-            &port_name,
-            PortCap::WRITE | PortCap::SUBS_WRITE | PortCap::NO_EXPORT,
-            PortType::APPLICATION,
-        )
-        .map_err(|error| init_error(&error))?;
-    let subscription = PortSubscribe::empty().map_err(|error| init_error(&error))?;
+    let seq = Seq::open(None, Some(alsa::Direction::Capture), false)?;
+    seq.set_client_name(WATCH_CLIENT_NAME)?;
+    let port = seq.create_simple_port(
+        ANNOUNCE_PORT_NAME,
+        PortCap::WRITE | PortCap::SUBS_WRITE | PortCap::NO_EXPORT,
+        PortType::APPLICATION,
+    )?;
+    let subscription = PortSubscribe::empty()?;
     subscription.set_sender(Addr::system_announce());
     subscription.set_dest(Addr {
-        client: seq.client_id().map_err(|error| init_error(&error))?,
+        client: seq.client_id()?,
         port,
     });
-    seq.subscribe_port(&subscription)
-        .map_err(|error| init_error(&error))?;
+    seq.subscribe_port(&subscription)?;
     Ok(seq)
 }
 
@@ -113,10 +102,16 @@ fn watch_loop(seq: &Seq, open: &Registry, notify: &dyn Fn()) {
             Err(error) => {
                 failures += 1;
                 if failures > 20 {
-                    tracing::warn!(%error, "MIDI port watch stopped");
+                    tracing::warn!(
+                        error = &error as &dyn std::error::Error,
+                        "MIDI port watch stopped"
+                    );
                     return;
                 }
-                tracing::debug!(%error, "MIDI announce read failed");
+                tracing::debug!(
+                    error = &error as &dyn std::error::Error,
+                    "MIDI announce read failed"
+                );
                 thread::sleep(Duration::from_millis(100));
                 true
             }
@@ -138,7 +133,7 @@ fn watch_loop(seq: &Seq, open: &Registry, notify: &dyn Fn()) {
 
 impl MidiBackend for MidirBackend {
     fn ports(&self) -> Result<Vec<PortInfo>, MidiError> {
-        let seq = Seq::open(None, None, true).map_err(|error| init_error(&error))?;
+        let seq = Seq::open(None, None, true)?;
         let present = port_names(&seq);
         mark_gone(&self.open, &present);
         Ok(present.into_iter().map(|name| PortInfo { name }).collect())
@@ -169,7 +164,7 @@ impl MidiBackend for MidirBackend {
         thread::Builder::new()
             .name("ampghost-port-watch".to_owned())
             .spawn(move || watch_loop(&seq, &open, &*notify))
-            .map_err(|error| MidiError::Init(error.to_string()))?;
+            .map_err(MidiError::Watcher)?;
         tracing::info!("watching MIDI port announcements");
         Ok(())
     }
@@ -210,9 +205,7 @@ impl MidiTransport for MidirTransport {
     fn send(&mut self, message: &[u8]) -> Result<(), MidiError> {
         self.check_present()?;
         tracing::trace!(bytes = ?message, "midi out");
-        self.output
-            .send(message)
-            .map_err(|error| MidiError::Send(error.to_string()))
+        self.output.send(message).map_err(MidiError::from)
     }
 
     fn receive(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>, MidiError> {
@@ -244,8 +237,7 @@ fn connect_input(
     name: &str,
     sender: mpsc::Sender<Vec<u8>>,
 ) -> Result<MidiInputConnection<InputState>, MidiError> {
-    let mut input =
-        MidiInput::new(CLIENT_NAME).map_err(|error| MidiError::Init(error.to_string()))?;
+    let mut input = MidiInput::new(CLIENT_NAME)?;
     input.ignore(Ignore::None);
     let port = input
         .ports()
@@ -264,13 +256,12 @@ fn connect_input(
         .connect(&port, CLIENT_NAME, on_input, state)
         .map_err(|error| MidiError::Connect {
             port: name.to_owned(),
-            reason: error.to_string(),
+            kind: error.kind(),
         })
 }
 
 fn connect_output(name: &str) -> Result<MidiOutputConnection, MidiError> {
-    let output =
-        MidiOutput::new(CLIENT_NAME).map_err(|error| MidiError::Init(error.to_string()))?;
+    let output = MidiOutput::new(CLIENT_NAME)?;
     let port = output
         .ports()
         .into_iter()
@@ -284,6 +275,6 @@ fn connect_output(name: &str) -> Result<MidiOutputConnection, MidiError> {
         .connect(&port, CLIENT_NAME)
         .map_err(|error| MidiError::Connect {
             port: name.to_owned(),
-            reason: error.to_string(),
+            kind: error.kind(),
         })
 }

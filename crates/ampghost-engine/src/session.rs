@@ -34,9 +34,7 @@ impl Session {
         loop {
             let remaining = deadline.saturating_duration_since(clock.now());
             if remaining.is_zero() {
-                return Err(EngineError::NotFound {
-                    last: Some(format!("no identity reply on {port}")),
-                });
+                return Err(EngineError::IdentityTimeout { port });
             }
             let Some(bytes) = transport.receive(remaining)? else {
                 continue;
@@ -89,7 +87,10 @@ impl Session {
         match decode(&bytes) {
             Ok(message) => Ok(Some(message)),
             Err(error) => {
-                tracing::warn!(%error, "dropping invalid message");
+                tracing::warn!(
+                    error = &error as &dyn std::error::Error,
+                    "dropping invalid message"
+                );
                 Ok(Some(Incoming::Other(Vec::new())))
             }
         }
@@ -182,7 +183,10 @@ impl Session {
                     return Err(error.into());
                 }
                 Err(error) => {
-                    tracing::warn!(%error, "dropping invalid message during backup");
+                    tracing::warn!(
+                        error = &error as &dyn std::error::Error,
+                        "dropping invalid message during backup"
+                    );
                     continue;
                 }
             };
@@ -209,7 +213,11 @@ impl Session {
         let result = loop {
             match self.read_temp_once() {
                 Err(error) if attempt < attempts && read_can_retry(&error) => {
-                    tracing::warn!(%error, attempt, "temp read incomplete, reading again");
+                    tracing::warn!(
+                        error = &error as &dyn std::error::Error,
+                        attempt,
+                        "temp read incomplete, reading again"
+                    );
                     attempt += 1;
                 }
                 other => break other,

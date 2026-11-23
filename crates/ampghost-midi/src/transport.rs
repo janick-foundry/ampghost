@@ -30,7 +30,7 @@ pub trait MidiBackend: Send {
 
     fn watch(&self, notify: Box<dyn Fn() + Send>) -> Result<(), MidiError> {
         drop(notify);
-        Err(MidiError::Init("port watching is not available".to_owned()))
+        Err(MidiError::WatchUnavailable)
     }
 }
 

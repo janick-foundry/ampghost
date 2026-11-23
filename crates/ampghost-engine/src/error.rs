@@ -6,8 +6,13 @@ use ampghost_store::StoreError;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum EngineError {
-    #[error("no Katana answered the identity request{}", last_reason(.last.as_deref()))]
-    NotFound { last: Option<String> },
+    #[error("no Katana answered the identity request")]
+    NotFound {
+        #[source]
+        last: Option<Box<EngineError>>,
+    },
+    #[error("no identity reply on {port}")]
+    IdentityTimeout { port: String },
     #[error(
         "unsupported device ({identity}); only identity information is available and all writes are refused"
     )]
@@ -54,10 +59,6 @@ impl EngineError {
             _ => false,
         }
     }
-}
-
-fn last_reason(last: Option<&str>) -> String {
-    last.map_or_else(String::new, |reason| format!(" (last error: {reason})"))
 }
 
 fn describe(mismatches: &[ByteMismatch]) -> String {

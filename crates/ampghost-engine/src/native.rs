@@ -107,8 +107,11 @@ impl FileStorage {
     }
 }
 
-fn storage_error(error: &std::io::Error) -> StoreError {
-    StoreError::Storage(error.to_string())
+fn storage_error(path: &Path) -> impl FnOnce(std::io::Error) -> StoreError + '_ {
+    move |source| StoreError::Storage {
+        path: path.to_path_buf(),
+        source,
+    }
 }
 
 impl PresetStorage for FileStorage {
@@ -116,11 +119,11 @@ impl PresetStorage for FileStorage {
         let entries = match fs::read_dir(&self.root) {
             Ok(entries) => entries,
             Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(error) => return Err(storage_error(&error)),
+            Err(error) => return Err(storage_error(&self.root)(error)),
         };
         let mut keys = Vec::new();
         for entry in entries {
-            let entry = entry.map_err(|error| storage_error(&error))?;
+            let entry = entry.map_err(storage_error(&self.root))?;
             let Ok(name) = entry.file_name().into_string() else {
                 continue;
             };
@@ -140,19 +143,18 @@ impl PresetStorage for FileStorage {
         let path = self.path(key)?;
         fs::read(&path).map_err(|error| match error.kind() {
             ErrorKind::NotFound => StoreError::NotFound(path.display().to_string()),
-            _ => storage_error(&error),
+            _ => storage_error(&path)(error),
         })
     }
 
     fn write(&mut self, key: &str, bytes: &[u8]) -> Result<(), StoreError> {
         let path = self.path(key)?;
-        fs::create_dir_all(&self.root).map_err(|error| storage_error(&error))?;
+        fs::create_dir_all(&self.root).map_err(storage_error(&self.root))?;
         let temporary = self.root.join(format!(".{key}.partial"));
-        let mut file = fs::File::create(&temporary).map_err(|error| storage_error(&error))?;
-        file.write_all(bytes)
-            .map_err(|error| storage_error(&error))?;
-        file.sync_all().map_err(|error| storage_error(&error))?;
-        fs::rename(&temporary, &path).map_err(|error| storage_error(&error))?;
+        let mut file = fs::File::create(&temporary).map_err(storage_error(&temporary))?;
+        file.write_all(bytes).map_err(storage_error(&temporary))?;
+        file.sync_all().map_err(storage_error(&temporary))?;
+        fs::rename(&temporary, &path).map_err(storage_error(&path))?;
         tracing::info!(path = %path.display(), bytes = bytes.len(), "stored");
         Ok(())
     }
@@ -161,7 +163,7 @@ impl PresetStorage for FileStorage {
         let path = self.path(key)?;
         fs::remove_file(&path).map_err(|error| match error.kind() {
             ErrorKind::NotFound => StoreError::NotFound(path.display().to_string()),
-            _ => storage_error(&error),
+            _ => storage_error(&path)(error),
         })?;
         tracing::info!(path = %path.display(), "deleted");
         Ok(())

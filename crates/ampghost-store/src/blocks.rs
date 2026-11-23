@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use ampghost_protocol::{BackupLayout, PatchBlock, PatchImage, PatchLayout, PatchOffset};
 
@@ -21,7 +21,9 @@ pub struct BlockImport {
     pub unknown: Vec<String>,
 }
 
-fn parse_defaults() -> Result<BTreeMap<String, Vec<u8>>, StoreError> {
+type Defaults = BTreeMap<String, Vec<u8>>;
+
+fn parse_defaults() -> Result<Defaults, StoreError> {
     let rows: BTreeMap<String, String> = serde_json::from_str(MK2_DEFAULT_BLOCKS_JSON)?;
     rows.into_iter()
         .map(|(name, text)| Ok((name, crate::preset::unhex(&text)?)))
@@ -29,21 +31,20 @@ fn parse_defaults() -> Result<BTreeMap<String, Vec<u8>>, StoreError> {
 }
 
 pub fn default_block(block: &PatchBlock) -> Result<Vec<u8>, StoreError> {
-    static DEFAULTS: OnceLock<Result<BTreeMap<String, Vec<u8>>, String>> = OnceLock::new();
+    static DEFAULTS: OnceLock<Result<Defaults, Arc<StoreError>>> = OnceLock::new();
     let defaults = DEFAULTS
-        .get_or_init(|| parse_defaults().map_err(|error| error.to_string()))
+        .get_or_init(|| parse_defaults().map_err(Arc::new))
         .as_ref()
-        .map_err(|error| StoreError::Defaults(error.clone()))?;
+        .map_err(|error| StoreError::Defaults(Arc::clone(error)))?;
     let data = defaults
         .get(block.name)
-        .ok_or_else(|| StoreError::Defaults(format!("no default for block {}", block.name)))?;
+        .ok_or_else(|| StoreError::DefaultMissing(block.name.to_owned()))?;
     if data.len() != block.len() {
-        return Err(StoreError::Defaults(format!(
-            "default for block {} has {} bytes, expected {}",
-            block.name,
-            data.len(),
-            block.size
-        )));
+        return Err(StoreError::DefaultLength {
+            block: block.name.to_owned(),
+            expected: block.len(),
+            actual: data.len(),
+        });
     }
     Ok(data.clone())
 }

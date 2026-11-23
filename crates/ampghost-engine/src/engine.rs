@@ -61,7 +61,10 @@ impl Engine {
 
     pub fn watch_ports(&self, notify: Box<dyn Fn() + Send>) {
         if let Err(error) = self.backend.watch(notify) {
-            tracing::warn!(%error, "MIDI port announcements unavailable, checking ports periodically");
+            tracing::warn!(
+                error = &error as &dyn std::error::Error,
+                "MIDI port announcements unavailable, checking ports periodically"
+            );
         }
     }
 
@@ -70,7 +73,10 @@ impl Engine {
         let ports = match self.backend.ports() {
             Ok(ports) => ports,
             Err(error) => {
-                tracing::debug!(%error, "listing MIDI ports failed");
+                tracing::debug!(
+                    error = &error as &dyn std::error::Error,
+                    "listing MIDI ports failed"
+                );
                 return;
             }
         };
@@ -127,7 +133,7 @@ impl Engine {
                 }
                 Err(error) => {
                     self.session = None;
-                    tracing::warn!(port = %port.name, %error, "probe failed");
+                    tracing::warn!(port = %port.name, error = &error as &dyn std::error::Error, "probe failed");
                 }
             }
         }
@@ -165,7 +171,7 @@ impl Engine {
         match result {
             Ok(event) => sink(event),
             Err(error) => {
-                tracing::error!(%error, "command failed");
+                tracing::error!(error = &error as &dyn std::error::Error, "command failed");
                 sink(Event::Failed(error));
             }
         }
@@ -183,7 +189,9 @@ impl Engine {
                     self.disconnect(sink);
                     return;
                 }
-                Err(error) => tracing::debug!(%error, "idle poll failed"),
+                Err(error) => {
+                    tracing::debug!(error = &error as &dyn std::error::Error, "idle poll failed");
+                }
                 Ok(()) => {}
             }
             let packets = session.take_unsolicited();
@@ -208,7 +216,10 @@ impl Engine {
         match switched {
             Ok(Some(switch)) => sink(Event::AmpSwitched(switch)),
             Ok(None) => {}
-            Err(error) => tracing::warn!(%error, "could not follow the amp's channel change"),
+            Err(error) => tracing::warn!(
+                error = &error as &dyn std::error::Error,
+                "could not follow the amp's channel change"
+            ),
         }
     }
 
@@ -266,8 +277,8 @@ impl Engine {
                 Err(error) if error.is_disconnect() => return Err(error),
                 Err(error) => {
                     self.session = None;
-                    tracing::warn!(port = %port.name, %error, "probe failed");
-                    last = Some(error.to_string());
+                    tracing::warn!(port = %port.name, error = &error as &dyn std::error::Error, "probe failed");
+                    last = Some(Box::new(error));
                 }
             }
         }
@@ -460,7 +471,7 @@ impl Engine {
                 Ok(outcome) => return Ok(outcome),
                 Err(error) if error.is_disconnect() => return Err(error),
                 Err(error) => {
-                    tracing::warn!(%channel, row, %error, "stored reload failed, bouncing");
+                    tracing::warn!(%channel, row, error = &error as &dyn std::error::Error, "stored reload failed, bouncing");
                 }
             }
         }

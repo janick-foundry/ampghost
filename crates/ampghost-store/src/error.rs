@@ -1,22 +1,34 @@
+use std::num::ParseIntError;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use ampghost_protocol::ProtocolError;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum StoreError {
-    #[error("preset JSON is invalid: {0}")]
+    #[error("preset JSON is invalid")]
     Json(#[from] serde_json::Error),
     #[error("unsupported preset format {format} version {version}")]
     Format { format: String, version: u32 },
-    #[error("invalid hex data: {0}")]
-    Hex(String),
+    #[error("invalid hex byte {token:?}")]
+    Hex {
+        token: String,
+        #[source]
+        source: ParseIntError,
+    },
     #[error(transparent)]
     Protocol(#[from] ProtocolError),
     #[error("invalid storage key {0:?}")]
     InvalidKey(String),
     #[error("{0} not found in storage")]
     NotFound(String),
-    #[error("storage failure: {0}")]
-    Storage(String),
+    #[error("storage failure at {}", .path.display())]
+    Storage {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     #[error("{0} already exists in storage")]
     AlreadyExists(String),
     #[error("block {block} has {actual} bytes, at most {expected} are allowed")]
@@ -29,8 +41,16 @@ pub enum StoreError {
     BlockValue { block: String, value: String },
     #[error("block {0} lies outside the patch image")]
     BlockOutsideImage(String),
-    #[error("embedded default blocks are invalid: {0}")]
-    Defaults(String),
+    #[error("embedded default blocks are invalid")]
+    Defaults(#[source] Arc<StoreError>),
+    #[error("embedded default blocks have no entry for block {0}")]
+    DefaultMissing(String),
+    #[error("embedded default for block {block} has {actual} bytes, expected {expected}")]
+    DefaultLength {
+        block: String,
+        expected: usize,
+        actual: usize,
+    },
     #[error("device {0:?} is not supported, expected \"KATANA MkII\"")]
     Device(String),
     #[error("format revision {0:?} is not supported")]

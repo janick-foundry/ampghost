@@ -4,6 +4,7 @@ mod dialogs;
 mod files;
 mod i18n;
 mod params_view;
+mod report;
 mod window;
 
 use adw::prelude::*;

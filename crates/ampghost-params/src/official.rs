@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use ampghost_protocol::{PatchImage, PatchOffset};
 
@@ -23,13 +23,12 @@ pub struct Normalised {
 
 fn parse() -> Result<Vec<OfficialRange>, ParamsError> {
     let rows: Vec<[u16; 5]> = serde_json::from_str(OFFICIAL_RANGES_JSON)
-        .map_err(|error| ParamsError::Parse(error.to_string()))?;
+        .map_err(|error| ParamsError::Json(Arc::new(error)))?;
     rows.into_iter()
         .map(|[page, byte, bytes, min, max]| {
-            let page = u8::try_from(page).map_err(|error| ParamsError::Parse(error.to_string()))?;
-            let byte = u8::try_from(byte).map_err(|error| ParamsError::Parse(error.to_string()))?;
-            let bytes =
-                u8::try_from(bytes).map_err(|error| ParamsError::Parse(error.to_string()))?;
+            let page = u8::try_from(page)?;
+            let byte = u8::try_from(byte)?;
+            let bytes = u8::try_from(bytes)?;
             if !(1..=2).contains(&bytes) || min > max {
                 return Err(ParamsError::Parse(format!(
                     "official range at {page:02X} {byte:02X} is malformed"
@@ -63,14 +62,17 @@ fn read(image: &PatchImage, range: &OfficialRange) -> Option<u16> {
 }
 
 fn write(image: &mut PatchImage, range: &OfficialRange, value: u16) -> Result<(), ParamsError> {
-    let failed = || ParamsError::Parse(format!("cannot set official value at {}", range.offset));
-    let low = u8::try_from(value & 0x7F).map_err(|_| failed())?;
+    let failed = |source| ParamsError::Conform {
+        offset: range.offset.to_string(),
+        source,
+    };
+    let low = u8::try_from(value & 0x7F)?;
     if range.bytes == 1 {
-        return image.set(range.offset, low).map_err(|_| failed());
+        return image.set(range.offset, low).map_err(failed);
     }
-    let high = u8::try_from((value >> 7) & 0x7F).map_err(|_| failed())?;
-    image.set(range.offset, high).map_err(|_| failed())?;
-    image.set(range.offset.plus(1), low).map_err(|_| failed())
+    let high = u8::try_from((value >> 7) & 0x7F)?;
+    image.set(range.offset, high).map_err(failed)?;
+    image.set(range.offset.plus(1), low).map_err(failed)
 }
 
 pub fn conform_to_official(image: &mut PatchImage) -> Result<Vec<Normalised>, ParamsError> {

@@ -7,6 +7,7 @@ use ampghost_store::{FullBackup, blocks_to_image, decode_tsl, encode_alb};
 use anyhow::{Context, Result};
 
 use crate::i18n::{tr, trf};
+use crate::report;
 
 const PROFILE: &DeviceProfile = &KATANA_50_MK2;
 
@@ -85,11 +86,11 @@ pub fn load_tones(path: &Path) -> Result<ToneFile> {
 
 fn load_tone(blocks: &[ampghost_store::NamedBlock]) -> Result<(PatchImage, String), String> {
     let (mut image, report) = blocks_to_image(blocks, &PROFILE.patch_layout, &PROFILE.backup)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| report::chain(&error))?;
     let normalised = ampghost_params::conform_to_official(&mut image).map_err(|error| {
         trf(
             "Outside the official ranges: {error}",
-            &[("error", &error.to_string())],
+            &[("error", &report::chain(&error))],
         )
     })?;
     let mut lines = Vec::new();

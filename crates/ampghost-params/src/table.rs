@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use serde::Deserialize;
 
@@ -36,7 +36,7 @@ pub struct ParamTable {
 impl ParamTable {
     fn parse() -> Result<Self, ParamsError> {
         let raw: RawTable = serde_json::from_str(PARAMS_JSON)
-            .map_err(|error| ParamsError::Parse(error.to_string()))?;
+            .map_err(|error| ParamsError::Json(Arc::new(error)))?;
         if raw.schema != 1 {
             return Err(ParamsError::Parse(format!(
                 "unsupported schema {}",

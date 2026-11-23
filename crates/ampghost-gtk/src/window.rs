@@ -24,6 +24,7 @@ use crate::dialogs::{self, SwitchChoice, ToneTarget};
 use crate::files::{self, ToneFile};
 use crate::i18n::{tr, trf};
 use crate::params_view::{self, Edit, OnChange, ParamsView, Structure};
+use crate::report;
 
 const EVENT_PUMP: Duration = Duration::from_millis(30);
 const CONTINUOUS_WRITE_DEBOUNCE: Duration = Duration::from_millis(500);
@@ -975,10 +976,18 @@ impl Ui {
 
     fn on_failed(self: &Rc<Self>, job: Option<Job>, error: &EngineError) {
         if error.is_disconnect() {
-            tracing::info!(?job, %error, "cancelled, the Katana is gone");
+            tracing::info!(
+                ?job,
+                error = error as &(dyn std::error::Error + 'static),
+                "cancelled, the Katana is gone"
+            );
             return;
         }
-        tracing::warn!(?job, %error, "command failed");
+        tracing::warn!(
+            ?job,
+            error = error as &(dyn std::error::Error + 'static),
+            "command failed"
+        );
         match (job, error) {
             (_, EngineError::NotFound { .. }) | (Some(Job::Detect), _) => {
                 let mut model = self.model.borrow_mut();
@@ -1004,21 +1013,21 @@ impl Ui {
             (Some(Job::Backup(_)), _) => {
                 self.toast(&trf(
                     "Could not back up the current sound, nothing was changed: {error}",
-                    &[("error", &error.to_string())],
+                    &[("error", &report::chain(error))],
                 ));
             }
             (Some(Job::WriteParams), _) => {
                 self.drop_pending_writes("write failed");
                 self.toast(&trf(
                     "Could not write the change: {error}",
-                    &[("error", &error.to_string())],
+                    &[("error", &report::chain(error))],
                 ));
                 self.send(Command::ReadTemp, Job::ReadTemp);
             }
             (Some(Job::WriteChain { .. }), _) => {
                 self.toast(&trf(
                     "Could not change the signal chain: {error}",
-                    &[("error", &error.to_string())],
+                    &[("error", &report::chain(error))],
                 ));
                 self.send(Command::ReadTemp, Job::ReadTemp);
             }
@@ -1027,21 +1036,21 @@ impl Ui {
                 &tr("Amp Backup Failed"),
                 &trf(
                     "No file was written. The amp was only read, nothing was changed: {error}",
-                    &[("error", &error.to_string())],
+                    &[("error", &report::chain(error))],
                 ),
             ),
             (Some(Job::SendTone(_)), _) => {
                 self.toast(&trf(
                     "Could not send the preset to temp: {error}",
-                    &[("error", &error.to_string())],
+                    &[("error", &report::chain(error))],
                 ));
                 self.send(Command::ReadTemp, Job::ReadTemp);
             }
             (Some(Job::SavePreset), _) => {
                 self.model.borrow_mut().pending_switch = None;
-                self.toast(&error.to_string());
+                self.toast(&report::chain(error));
             }
-            _ => self.toast(&error.to_string()),
+            _ => self.toast(&report::chain(error)),
         }
     }
 
@@ -1345,8 +1354,11 @@ impl Ui {
                 Ok(next) => *image = next,
                 Err(error) => {
                     drop(model);
-                    tracing::warn!(%error, "refusing chain write");
-                    self.toast(&error.to_string());
+                    tracing::warn!(
+                        error = &error as &dyn std::error::Error,
+                        "refusing chain write"
+                    );
+                    self.toast(&report::chain(&error));
                     return;
                 }
             }

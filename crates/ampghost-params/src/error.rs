@@ -1,8 +1,23 @@
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+use std::num::TryFromIntError;
+use std::sync::Arc;
+
+use ampghost_protocol::ProtocolError;
+
+#[derive(Debug, Clone, thiserror::Error)]
 #[non_exhaustive]
 pub enum ParamsError {
     #[error("embedded parameter table is invalid: {0}")]
     Parse(String),
+    #[error("embedded parameter table is not valid JSON")]
+    Json(#[source] Arc<serde_json::Error>),
+    #[error("embedded official range holds a value that does not fit")]
+    RangeValue(#[from] TryFromIntError),
+    #[error("cannot set the official value at {offset}")]
+    Conform {
+        offset: String,
+        #[source]
+        source: ProtocolError,
+    },
     #[error("unknown parameter {0}")]
     Unknown(String),
     #[error("value {value} is not valid for parameter {id}")]
